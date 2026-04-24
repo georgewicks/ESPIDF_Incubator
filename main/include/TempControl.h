@@ -18,3 +18,4 @@
 
 extern esp_err_t   Temp_set_target_temp( int val );
 extern esp_err_t   Temp_set_target_range( int val );
+extern esp_err_t   Temp_get_current_temp( int *val );

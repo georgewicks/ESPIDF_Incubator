@@ -85,6 +85,13 @@ esp_err_t   Temp_set_target_range( int val )
     return ESP_OK;
 }
 
+esp_err_t   Temp_get_current_temp( int *val)
+{
+    ESP_LOGI(TAG,"Temp_get_current_temp called");
+    *val = (int)CurrentTemp;
+    return ESP_OK;
+}
+
 void TempControl(void *pvParameters) 
 {
     MCP9808_config_t    cfg;  
@@ -123,7 +130,7 @@ void TempControl(void *pvParameters)
         }
         else
         {
-            ESP_LOGI(TAG, "Temperature is %f", res);
+            ESP_LOGI(TAG, "Temperature is %f C (%f F)", res, (res*9)/5 + 32);
 
         }
 
@@ -149,7 +156,7 @@ void TempControl(void *pvParameters)
 			}
 		}
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
 
     }
 

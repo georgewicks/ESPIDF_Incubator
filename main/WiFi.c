@@ -384,6 +384,28 @@ static esp_err_t TargetTempRange_post_handler(httpd_req_t *req)
 
 }
 
+// data handler for the CurrentTemperature
+esp_err_t data_handler(httpd_req_t *req) 
+{
+    char 	data_str[50];
+	int		val;
+	ESP_LOGI(TAG, "data_handler req->uri=[%s]", req->uri);
+
+    // Retrieve sensor data
+    //float temperature = read_sensor(); 
+	esp_err_t  ret;
+	ret = Temp_get_current_temp(&val);
+	if(ret != ESP_OK)
+	{
+		ESP_LOGE(TAG, "error from Temp_get_current_temp ");
+	}
+    sprintf(data_str, "%d", val);
+    
+    // Send data to browser
+    httpd_resp_send(req, data_str, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
 /* Function to start the web server */
 esp_err_t start_server(const char *base_path, int port)
 {
@@ -423,18 +445,26 @@ esp_err_t start_server(const char *base_path, int port)
 #endif
 
 	httpd_uri_t _TargetTemperature_post_handler = {
-		.uri		 = "/TargetTemperature",
+		.uri		 = "TargetTemperature",
 		.method		 = HTTP_POST,
 		.handler	 = TargetTemperature_post_handler,
 	};
 	httpd_register_uri_handler(server, &_TargetTemperature_post_handler);
 	
 	httpd_uri_t _TargetTempRange_post_handler = {
-		.uri		 = "/TargetTempRange",
+		.uri		 = "TargetTempRange",
 		.method		 = HTTP_POST,
 		.handler	 = TargetTempRange_post_handler,
 	};
 	httpd_register_uri_handler(server, &_TargetTempRange_post_handler);
+
+	// Current temperature will be sent to the browser from this handler.
+	httpd_uri_t _get_data_handler = {
+		.uri		 = "CurrentTemperature",
+		.method		 = HTTP_GET,
+		.handler	 = data_handler,
+	};
+	httpd_register_uri_handler(server, &_get_data_handler);
 
 #if 0
 	/* URI handler for favicon.ico */

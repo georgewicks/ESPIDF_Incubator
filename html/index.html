@@ -1,32 +1,39 @@
 <!DOCTYPE HTML>
 <html>
 <head><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Incubator</title><style>body{background-color:lightgreen;font-size:24px;}
+    <title>Incubator</title>
+    <style>
+    body{background-color:lightgreen;font-size:24px;}
     </style>
 </head>
-<body><h1 style="text-align: center;">Incubator</h1>
+<body>
+  <h1 style="text-align: center;">Incubator</h1>
    	<p>Uptime:  12:45:23 (DD:HH:MM)</p>
-    <p>Current Temperature: <span id="CurrentTemperature">25</span></p>
-    <p>Target Temperature: <span id="TargetTemperature">25 <input type="number" onchange="updateTargetTemp(this)" min="20" max="35"value="25"> </span></p>
-    <p>Temperature Band: +/-2 (Range will be 23 to 27)<span id="TargetTempRange">25 <input type="number" onchange="updateTargetBand(this)" min="1" max="5" value="2"> </span></p>
+    <p>Current Temperature: 25 <span id="CurrentTemperature">--</span>°C</p>
+    <p>Target Temperature: <span id="TargetTemperature">25 <input type="range" onchange="updateTargetTemp(this)" min="20" max="35"value="25"> </span></p>
+    <p>Temperature Band: +/-2 (Range will be 23 to 27)<span id="TargetTempRange">25 <input type="range" onchange="updateTargetBand(this)" min="1" max="5" value="2"> </span></p>
 </body>
 
 <script>
 
-setInterval(function() {
-    // Call function every 2 second interval 
-    getData();
-}, 2000);
+//setInterval(function() {
+//    // Call function every 2 second interval 
+//    getData();
+//}, 2000);
+
+setInterval(getData,2000);
 
 function getData() {
   var xhttp = new XMLHttpRequest();
   xhttp.onreadystatechange = function() 
   {
     if (this.readyState == 4 && this.status == 200) {
-      document.getElementById("CurrentTemperature") = this.responseText;
+      document.getElementById("CurrentTemperature").innerText = this.responseText;
     }
   };
-  xhttp.open("GET", "CurrentTemperature", true);
+  alert("Time to update");
+  //xhttp.open("POST", "CurrentTemperature", true);
+  xhttp.open("GET", "/CurrentTemperature", true);
   xhttp.send();
 }
 
@@ -40,7 +47,7 @@ function updateTargetTemp(element)
       this.responseText;
     }
   };
-  xhttp.open("POST", "TargetTemperature", true);
+  xhttp.open("POST", "/TargetTemperature", true);
   xhttp.send();
 }
 
@@ -54,7 +61,7 @@ function updateTargetBand(element)
       this.responseText;
     }
   };
-  xhttp.open("POST", "TargetTempRange", true);
+  xhttp.open("POST", "/TargetTempRange", true);
   xhttp.send();
 }
 

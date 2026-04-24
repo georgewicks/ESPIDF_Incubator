@@ -265,7 +265,7 @@ void app_main() {
 	ESP_LOGI(TAG, "%s: starting TempControl ", __FILE__);
 	
 	// Run the temperature control task
-	xTaskCreate(&TempControl, "TempControl", 2048, NULL, 4, NULL);
+	xTaskCreate(&TempControl, "TempControl", 2048*2, NULL, 4, NULL);
 
 	// Get the local IP address
 	esp_netif_ip_info_t ip_info;
