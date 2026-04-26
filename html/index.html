@@ -3,69 +3,36 @@
 <head><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Incubator</title>
     <style>
+		html {font-family: Arial; display: inline-block; text-align: center;}
+		h1 {font-size: 2.9rem;}
+		h2 {font-size: 2.1rem;}
+		p {font-size: 1.9rem;}
     body{background-color:lightgreen;font-size:24px;}
+		.slider { -webkit-appearance: none; margin: 14px; width: 400px; height: 15px; border-radius: 5px; background: #39a6de; outline: none; -webkit-transition: .2s; transition: opacity .2s;}
+		.slider::-webkit-slider-thumb {-webkit-appearance: none; appearance: none; width: 25px; height: 25px; border-radius: 12px; background: #f74d4d; cursor: pointer;}
+		.slider::-moz-range-thumb { width: 25px; height: 25px; border-radius: 12px; background: #F74D4D; cursor: pointer; } 
     </style>
 </head>
 <body>
-  <h1 style="text-align: center;">Incubator</h1>
-   	<p>Uptime:  12:45:23 (DD:HH:MM)</p>
-    <p>Current Temperature: 25 <span id="CurrentTemperature">--</span>°C</p>
-    <p>Target Temperature: <span id="TargetTemperature">25 <input type="range" onchange="updateTargetTemp(this)" min="20" max="35"value="25"> </span></p>
-    <p>Temperature Band: +/-2 (Range will be 23 to 27)<span id="TargetTempRange">25 <input type="range" onchange="updateTargetBand(this)" min="1" max="5" value="2"> </span></p>
-</body>
+	<h1>PWM Slider Control</h1>
+	
+	<h2>RGB Brightness</h2>
+	
+  TargetTemperature:<input type="range" onchange="updateTargetTemp()" id="pwmTargetTemp" min="20" max="35" value="25" step="1" class="slider">
+	<span id="textTargetTemp">23</span><br>
 
-<script>
-
-//setInterval(function() {
-//    // Call function every 2 second interval 
-//    getData();
-//}, 2000);
-
-setInterval(getData,2000);
-
-function getData() {
-  var xhttp = new XMLHttpRequest();
-  xhttp.onreadystatechange = function() 
-  {
-    if (this.readyState == 4 && this.status == 200) {
-      document.getElementById("CurrentTemperature").innerText = this.responseText;
+  <script>
+    function updateTargetTemp()
+    {
+      console.log("updateTargetTemp");
+	    var TempSliderValue = document.getElementById("pwmTargetTemp").value;
+	    document.getElementById("textTargetTemp").innerHTML = TempSliderValue;
+      var xhttp = new XMLHttpRequest();
+      xhttp.open("POST", "/post?TargetTemperature="+TempSliderValue, true);
+      xhttp.send();
     }
-  };
-  alert("Time to update");
-  //xhttp.open("POST", "CurrentTemperature", true);
-  xhttp.open("GET", "/CurrentTemperature", true);
-  xhttp.send();
-}
-
-function updateTargetTemp(element)
-{
-  var xhttp = new XMLHttpRequest();
-  xhttp.onreadystatechange = function() 
-  {
-    if (this.readyState == 4 && this.status == 200) {
-      document.getElementById("TargetTemperature").innerHTML =
-      this.responseText;
-    }
-  };
-  xhttp.open("POST", "/TargetTemperature", true);
-  xhttp.send();
-}
-
-function updateTargetBand(element)
-{
-  var xhttp = new XMLHttpRequest();
-  xhttp.onreadystatechange = function() 
-  {
-    if (this.readyState == 4 && this.status == 200) {
-      document.getElementById("TargetTempRange").innerHTML =
-      this.responseText;
-    }
-  };
-  xhttp.open("POST", "/TargetTempRange", true);
-  xhttp.send();
-}
-
 
 </script>
+</body>
 
 </html>

@@ -48,6 +48,7 @@ Incubator_URL 	to_send;
 
 static const char *TAG = "WiFi";	//TAG for debug
 
+static esp_err_t favicon_get_handler(httpd_req_t *req);
  
 extern int PWR5V_PIN;
 extern int	PWR12V_PIN;
@@ -119,6 +120,29 @@ static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
 
+int find_key_value(char * key, char * parameter, char * value) 
+{
+	//char * addr1;
+	char * addr1 = strstr(parameter, key);
+	if (addr1 == NULL) return 0;
+	ESP_LOGD(TAG, "addr1=%s", addr1);
+
+	char * addr2 = addr1 + strlen(key);
+	ESP_LOGD(TAG, "addr2=[%s]", addr2);
+
+	char * addr3 = strstr(addr2, "&");
+	ESP_LOGD(TAG, "addr3=%p", addr3);
+	if (addr3 == NULL) {
+		strcpy(value, addr2);
+	} else {
+		int length = addr3-addr2;
+		ESP_LOGD(TAG, "addr2=%p addr3=%p length=%d", addr2, addr3, length);
+		strncpy(value, addr2, length);
+		value[length] = 0;
+	}
+	ESP_LOGI(TAG, "key=[%s] value=[%s]", key, value);
+	return strlen(value);
+}
 /**
  * @brief These functions were copied from nopnop2002's esp-idf-pwm-slider github repo. The 
  * Text2Html() is of primary importance, as it allows us to have an exact HTML file to work with.
@@ -314,6 +338,40 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
+/* HTTP post handler */
+typedef struct {
+	char str_value_TargetTemperature[4];
+	long long_value_TargetTemperature;
+} URL_t;
+
+static esp_err_t root_post_handler(httpd_req_t *req)
+{
+	ESP_LOGI(TAG, "root_post_handler req->uri=[%s]", req->uri);
+	URL_t urlBuf;
+
+	// Locate the requested target temperature from the string: "TargetTemperature="+<temperature as a character string>
+	find_key_value("TargetTemperature=", (char *)req->uri, urlBuf.str_value_TargetTemperature);
+	ESP_LOGD(TAG, "urlBuf.str_value_red=[%s]", urlBuf.str_value_TargetTemperature);
+
+	urlBuf.long_value_TargetTemperature = strtol(urlBuf.str_value_TargetTemperature, NULL, 10);
+	ESP_LOGD(TAG, "urlBuf.long_value_red=%ld", urlBuf.long_value_TargetTemperature);
+
+	// Send to http_server_task
+	if (xQueueSend(xQueueHttp, &urlBuf, portMAX_DELAY) != pdPASS) {
+		ESP_LOGE(TAG, "xQueueSend Fail");
+	}
+
+	/* Redirect onto root to see the updated file list */
+	httpd_resp_set_status(req, "303 See Other");
+	httpd_resp_set_hdr(req, "Location", "/");
+#ifdef CONFIG_EXAMPLE_HTTPD_CONN_CLOSE_HEADER
+	httpd_resp_set_hdr(req, "Connection", "close");
+#endif
+	httpd_resp_sendstr(req, "post successfully");
+	return ESP_OK;
+}
+
+
 // The HTTP POST handlers
 // Update Target temperature
 static esp_err_t TargetTemperature_post_handler(httpd_req_t *req)
@@ -406,6 +464,13 @@ esp_err_t data_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+/* favicon get handler */
+static esp_err_t favicon_get_handler(httpd_req_t *req)
+{
+	ESP_LOGI(TAG, "favicon_get_handler req->uri=[%s]", req->uri);
+	return ESP_OK;
+}
+
 /* Function to start the web server */
 esp_err_t start_server(const char *base_path, int port)
 {
@@ -433,7 +498,7 @@ esp_err_t start_server(const char *base_path, int port)
 	};
 	httpd_register_uri_handler(server, &_root_get_handler);
 
-#if 0
+#if 1
 	/* URI handler for post */
 	httpd_uri_t _root_post_handler = {
 		.uri		 = "/post",
@@ -466,7 +531,7 @@ esp_err_t start_server(const char *base_path, int port)
 	};
 	httpd_register_uri_handler(server, &_get_data_handler);
 
-#if 0
+#if 1
 	/* URI handler for favicon.ico */
 	httpd_uri_t _favicon_get_handler = {
 		.uri		 = "/favicon.ico",
@@ -483,7 +548,8 @@ void http_server_task(void *pvParameters)
 {
 	char 			*task_parameter = (char *)pvParameters;
 	char 			url[64];
-	Incubator_URL	recvd;
+	//Incubator_URL	recvd;
+	URL_t			urlBuf;
 
 	ESP_LOGI(TAG, "Start task_parameter=%s", task_parameter);
 	sprintf(url, "http://%s:%d", task_parameter, CONFIG_WEB_PORT);
@@ -491,9 +557,12 @@ void http_server_task(void *pvParameters)
 	while(1) 
 	{
 		// Waiting for post - blocks indefinitely...
-		if (xQueueReceive(xQueueHttp, &recvd, portMAX_DELAY) == pdTRUE) 
+		if (xQueueReceive(xQueueHttp, &urlBuf, portMAX_DELAY) == pdTRUE) 
 		{
-			ESP_LOGI(TAG,"Recvd: %s",recvd.data);
+			ESP_LOGI(TAG,"Recvd: str_value_TargetTemperature = %s, long_value_TargetTemperature = %d ", 
+						urlBuf.str_value_TargetTemperature, urlBuf.long_value_TargetTemperature);
+
+
 		}
 	}
 
