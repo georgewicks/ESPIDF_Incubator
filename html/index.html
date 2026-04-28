@@ -14,9 +14,9 @@
     </style>
 </head>
 <body>
-	<h1>PWM Slider Control</h1>
+	<h1>Incubator</h1>
 	
-	<h2>RGB Brightness</h2>
+	<h2>Current Temperature:<span id="CurrTemp"> 0 </span></h2>
 	
   TargetTemperature:<input type="range" onchange="updateTargetTemp()" id="pwmTargetTemp" min="20" max="35" value="25" step="1" class="slider">
 	<span id="textTargetTemp">23</span><br>
@@ -31,7 +31,18 @@
       xhttp.open("POST", "/post?TargetTemperature="+TempSliderValue, true);
       xhttp.send();
     }
-
+    setInterval(function() { getData(); }, 2000); 
+    function getData() {
+      var xhttp = new XMLHttpRequest();
+      xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          document.getElementById("CurrTemp").innerHTML =
+          this.responseText;
+        }
+      };
+      xhttp.open("GET", "CurrentTemperature", true);
+      xhttp.send();
+    }
 </script>
 </body>
 

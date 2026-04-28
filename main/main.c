@@ -121,33 +121,13 @@ static void i2c_master_init(void)
 		.dev_addr_length = I2C_ADDR_BIT_LEN_7,
 		.device_address = MCP9808_I2CADDR_DEFAULT, 
 		.scl_speed_hz = 100000,
+		.scl_wait_us = 20000,							// the MCP9808 might need clock stretching.
 	};
 	i2c_master_bus_add_device(bus_handle, &dev_cfg, &dev_handle);
 
 #endif
 }
 
-#ifdef	INCLUDE_MDNS
-
-/**
- * @brief From nopnop2002 repo esp-idf-pwm-slider
- * 
- */
-
-void initialize_mdns(void)
-{
-	//initialize mDNS
-	ESP_ERROR_CHECK( mdns_init() );
-	//set mDNS hostname (required if you want to advertise services)
-	ESP_ERROR_CHECK( mdns_hostname_set(CONFIG_MDNS_HOSTNAME) );
-	ESP_LOGI(TAG, "mdns hostname set to: [%s]", CONFIG_MDNS_HOSTNAME);
-
-#if 0
-	//set default mDNS instance name
-	ESP_ERROR_CHECK( mdns_instance_name_set("ESP32 with mDNS") );
-#endif
-}
-#endif
 
 static void listSPIFFS(char * path) {
 	ESP_LOGI(TAG,"%s: called, path is %s ",__FILE__,path);
@@ -204,9 +184,6 @@ esp_err_t mountSPIFFS(char * path, char * label, int max_files) {
 }
 
 
-// *******************************************************************
-// Main
-// *******************************************************************
 /**
  * @brief app_main --- kicks off the NVS Flash initialization,the WiFi initialization, I2C bus init,
  * mDNS, GPIO pins, Temperature controller, and the HTTP Server application
@@ -236,11 +213,6 @@ void app_main() {
 	// Init I2C driver
 	ESP_LOGI(TAG, "%s: calling i2c_master_init", __FILE__);
     i2c_master_init();
-#ifdef	INCLUDE_MDNS
-
-	// Initialize mDNS
-	initialize_mdns();
-#endif
 
 	// Create Queue
 	xQueueHttp = xQueueCreate( 10, sizeof(Incubator_URL) );

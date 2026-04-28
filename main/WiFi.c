@@ -36,7 +36,6 @@
 #include <lwip/netdb.h>
 
 #include "driver/gpio.h"
-// #include "ds18b20.h"
 #include "mcp9808.h"
 #include "lwip/apps/mdns.h"
 
@@ -52,22 +51,6 @@ static esp_err_t favicon_get_handler(httpd_req_t *req);
  
 extern int PWR5V_PIN;
 extern int	PWR12V_PIN;
-
-/*
-// Build http header
-const static char http_html_hdr[] =
-		"HTTP/1.1 200 OK\r\nContent-type: text/html\r\n\r\n";
-
-// Build 404 header
-const static char http_404_hdr[] =
-"HTTP/1.1 404 Not Found\r\nContent-type: text/html\r\n\r\n";
-
-// Build http body
-const static char http_index_hml[] =
-		"<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
-		<title>Control</title><style>body{background-color:lightblue;font-size:24px;}</style></head>\
-		<body><h1>Control</h1><a href=\"high\">ON</a><br><a href=\"low\">OFF</a></body></html>";
- */
 
 
 // Copy over the station_example_main.c defines, constants vars:
@@ -525,7 +508,7 @@ esp_err_t start_server(const char *base_path, int port)
 
 	// Current temperature will be sent to the browser from this handler.
 	httpd_uri_t _get_data_handler = {
-		.uri		 = "CurrentTemperature",
+		.uri		 = "/CurrentTemperature",
 		.method		 = HTTP_GET,
 		.handler	 = data_handler,
 	};
