@@ -134,7 +134,12 @@ void TempControl(void *pvParameters)
 
         }
 
-        CurrentTemp = ret;
+        CurrentTemp = res;
+
+        // the following can be change by the user in the browser,
+        // so we need to  update these 
+	    turnOnThreshold = desiredTemperature - hysteresisBand;
+	    turnOffThreshold = desiredTemperature + hysteresisBand;
 
 		// Hysteresis logic
 		if (heaterState == OFF)

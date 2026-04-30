@@ -55,6 +55,8 @@ static esp_err_t favicon_get_handler(httpd_req_t *req);
 extern int PWR5V_PIN;
 extern int	PWR12V_PIN;
 
+extern float   desiredTemperature;
+extern float   hysteresisBand;
 
 // Copy over the station_example_main.c defines, constants vars:
 /* The examples use WiFi configuration that you can set via project configuration menu
@@ -510,7 +512,28 @@ esp_err_t data_handler(httpd_req_t *req)
 	{
 		// Block until we get the semaphore...
 		if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE)
-		{
+		{	
+			URL_t urlBuf;
+#if 0			
+typedef struct {
+	char str_value_TargetTemperature[4];
+	long long_value_TargetTemperature;
+} URL_t;
+#endif
+
+			// Locate the requested target temperature from the string: "TargetTemperature="+<temperature as a character string>
+//			find_key_value("TargetTemperature=", (char *)req->uri, urlBuf.str_value_TargetTemperature);
+//			ESP_LOGD(TAG, "urlBuf.str_value_red=[%s]", urlBuf.str_value_TargetTemperature);
+
+//			urlBuf.long_value_TargetTemperature = strtol(urlBuf.str_value_TargetTemperature, NULL, 10);
+//			ESP_LOGD(TAG, "urlBuf.long_value_red=%ld", urlBuf.long_value_TargetTemperature);
+
+//			// Send to http_server_task
+//			if (xQueueSend(xQueueHttp, &urlBuf, portMAX_DELAY) != pdPASS)
+//			{
+//				ESP_LOGE(TAG, "xQueueSend Fail");
+//			}
+
 			esp_err_t ret;
 			ret = Temp_get_current_temp(&val);
 			if (ret != ESP_OK)
@@ -518,6 +541,21 @@ esp_err_t data_handler(httpd_req_t *req)
 				ESP_LOGE(TAG, "error from Temp_get_current_temp ");
 			}
 			sprintf(data_str, "%d", val);
+
+			memcpy( urlBuf.str_value_TargetTemperature, data_str, 2);
+			urlBuf.long_value_TargetTemperature = (long)val;
+
+			ESP_LOGI(TAG, " data_str = %s, length = %d", data_str, strlen(data_str));
+
+			// Send to http_server_task
+			//memcpy(to_send.data, "TargetTemp triggered", 32);
+			//memcpy(to_send.data,data_str,strlen(data_str));
+
+			//if (xQueueSend(xQueueHttp, &to_send.data[0], portMAX_DELAY) != pdPASS)
+			if (xQueueSend(xQueueHttp, &urlBuf.str_value_TargetTemperature[0], portMAX_DELAY) != pdPASS)
+			{
+				ESP_LOGE(TAG, "xQueueSend Fail");
+			}
 
 			// Send data to browser
 			httpd_resp_send(req, data_str, HTTPD_RESP_USE_STRLEN);
@@ -632,6 +670,7 @@ void http_server_task(void *pvParameters)
 			ESP_LOGI(TAG,"Recvd: str_value_TargetTemperature = %s, long_value_TargetTemperature = %d ", 
 						urlBuf.str_value_TargetTemperature, urlBuf.long_value_TargetTemperature);
 
+			desiredTemperature = urlBuf.long_value_TargetTemperature;
 
 		}
 	}
