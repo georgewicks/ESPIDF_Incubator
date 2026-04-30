@@ -31,7 +31,7 @@
       xhttp.open("POST", "/post?TargetTemperature="+TempSliderValue, true);
       xhttp.send();
     }
-    setInterval(function() { getData(); }, 2000); 
+    setInterval(function() { getData(); }, 20000); 
     function getData() {
       var xhttp = new XMLHttpRequest();
       xhttp.onreadystatechange = function() {
