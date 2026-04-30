@@ -6,6 +6,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "freertos/event_groups.h"
+#include "freertos/semphr.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -35,6 +36,11 @@
 #include "Incubator.h"
 
 QueueHandle_t xQueueHttp;
+
+// Use a mutex to control access to the I2C bus during HTTP 
+// GET and POST operations in order to minimize the occurence 
+// of bus timeouts
+SemaphoreHandle_t	xMutex;
 
 #define ENABLE_STATIC_IP
 
@@ -192,6 +198,8 @@ esp_err_t mountSPIFFS(char * path, char * label, int max_files) {
 void app_main() {
 
 	ESP_LOGI(TAG, "%s: called", __FILE__);
+	
+    xMutex = xSemaphoreCreateMutex();
 
 	// ESP_ERROR_CHECK(nvs_flash_init());
 	// Initialize NVS

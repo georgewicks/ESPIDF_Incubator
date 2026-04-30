@@ -18,6 +18,7 @@
 #include "driver/i2c.h"
 #else
 #include "driver/i2c_master.h"
+extern SemaphoreHandle_t	xMutex;
 extern i2c_master_bus_handle_t bus_handle;
 extern i2c_master_dev_handle_t dev_handle;
 #endif
@@ -69,99 +70,57 @@ esp_err_t MCP9808_init(const MCP9808_config_t* conf, MCP9808_handle_t* handle, u
  
 esp_err_t MCP9808_read16(const MCP9808_config_t* desc, uint8_t reg, uint16_t* res)
 {
-    int ret;
-
-    ESP_LOGI(TAG, "MCP9808_read16 called ");
-
-#ifdef  LEGACY_I2C
-    uint8_t upper;
-    uint8_t lower;
-
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, 0x30, ACK_CHECK_EN);
-    i2c_master_write_byte(cmd, reg, ACK_CHECK_EN);
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, 0x31, ACK_CHECK_EN);
-    i2c_master_read_byte(cmd, &upper, ACK_VAL);
-    i2c_master_read_byte(cmd, &lower, NACK_VAL);
-    i2c_master_stop(cmd);
-
-    ESP_LOGI(TAG, "calling i2c_master_cmd_begin ");
-
-    ret = i2c_master_cmd_begin(desc->i2c_num, cmd, 1000 / portTICK_PERIOD_MS );
-
-    i2c_cmd_link_delete(cmd);
-
-    ESP_LOGI(TAG, "MCP9808_read16 adjusting upper and lower ");
-
-    *res = (upper << 8 ) | (lower & 0xff);
-
-#else
+    esp_err_t ret = ESP_OK;
 
     uint8_t write_buf[2];
     uint8_t read_buf[2];
 
     write_buf[0] = reg;
 
-    // the -1 will mean block forever
-    ret = i2c_master_transmit_receive(dev_handle, write_buf, 1, read_buf, 2, -1);
-    if(ret != ESP_OK)
+    if (xSemaphoreTake(xMutex, portMAX_DELAY) == pdTRUE) 
     {
-        ESP_LOGD(TAG, "error from i2c_master_transmit_receive = %s", esp_err_to_name(ret));
+
+        // the -1 will mean block forever
+        ret = i2c_master_transmit_receive(dev_handle, write_buf, 1, read_buf, 2, -1);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGD(TAG, "error from i2c_master_transmit_receive = %s", esp_err_to_name(ret));
+        }
+
+        xSemaphoreGive(xMutex);
     }
 
     *res = (read_buf[0] << 8 ) | (read_buf[1] & 0xff);
-
-#endif
 
     if (ret != ESP_OK)
     {
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "MCP9808_read16 done");
-
     return ESP_OK;
 }
 
 esp_err_t MCP9808_read8(const MCP9808_config_t* desc, uint8_t reg, uint8_t* res)
 {
-    int ret;
+    esp_err_t ret = ESP_OK;
 
-#ifdef  LEGACY_I2C
-    uint8_t result;
-
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, 0x30, ACK_CHECK_EN);
-    i2c_master_write_byte(cmd, reg, ACK_CHECK_EN);
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, 0x31, ACK_CHECK_EN);
-    i2c_master_read_byte(cmd, &result, NACK_VAL);
-    i2c_master_stop(cmd);
-
-    ret = i2c_master_cmd_begin(desc->i2c_num, cmd, 1000 / portTICK_PERIOD_MS);
-
-    i2c_cmd_link_delete(cmd);
-    *res = result;
-
-#else
     uint8_t write_buf[2];
     uint8_t read_buf[2];
 
     write_buf[0] = reg;
 
-    // the -1 will mean block forever
-    ret = i2c_master_transmit_receive(dev_handle, write_buf, 1, read_buf, 1, -1);
-    if(ret != ESP_OK)
+    if (xSemaphoreTake(xMutex, portMAX_DELAY) == pdTRUE)
     {
-        ESP_LOGD(TAG, "error from i2c_master_transmit_receive = %s", esp_err_to_name(ret));
+        // the -1 will mean block forever
+        ret = i2c_master_transmit_receive(dev_handle, write_buf, 1, read_buf, 1, -1);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGD(TAG, "error from i2c_master_transmit_receive = %s", esp_err_to_name(ret));
+        }
+        xSemaphoreGive(xMutex);
     }
 
     *res = read_buf[0];
-
-#endif
 
     if (ret != ESP_OK)
     {

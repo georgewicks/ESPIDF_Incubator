@@ -43,6 +43,9 @@
 #include "Incubator.h"
 
 extern QueueHandle_t xQueueHttp;
+extern SemaphoreHandle_t	xMutex;
+
+
 Incubator_URL 	to_send;
 
 static const char *TAG = "WiFi";	//TAG for debug
@@ -309,14 +312,28 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 {
 	ESP_LOGI(TAG, "root_get_handler req->uri=[%s]", req->uri);
 
-	/* Send index.html */
-	Text2Html(req, "/html/index.html");
+	while(1)
+	{
+		if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE)
+		{
+			/* Send index.html */
+			Text2Html(req, "/html/index.html");
 
-	/* Send Image */
-	Image2Html(req, "/html/ESP-LOGO.txt", "png");
+			/* Send Image */
+			Image2Html(req, "/html/ESP-LOGO.txt", "png");
 
-	/* Send empty chunk to signal HTTP response completion */
-	httpd_resp_sendstr_chunk(req, NULL);
+			/* Send empty chunk to signal HTTP response completion */
+			httpd_resp_sendstr_chunk(req, NULL);
+
+			xSemaphoreGive(xMutex);
+
+			break; // done!
+		}
+		else
+		{
+			vTaskDelay(pdMS_TO_TICKS(250));
+		}
+	}
 
 	return ESP_OK;
 }
@@ -344,13 +361,29 @@ static esp_err_t root_post_handler(httpd_req_t *req)
 		ESP_LOGE(TAG, "xQueueSend Fail");
 	}
 
-	/* Redirect onto root to see the updated file list */
-	httpd_resp_set_status(req, "303 See Other");
-	httpd_resp_set_hdr(req, "Location", "/");
+	while(1)
+	{
+		// Block until we get the semaphore...
+		if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE)
+		{
+			/* Redirect onto root to see the updated file list */
+			httpd_resp_set_status(req, "303 See Other");
+			httpd_resp_set_hdr(req, "Location", "/");
 #ifdef CONFIG_EXAMPLE_HTTPD_CONN_CLOSE_HEADER
-	httpd_resp_set_hdr(req, "Connection", "close");
+			httpd_resp_set_hdr(req, "Connection", "close");
 #endif
-	httpd_resp_sendstr(req, "post successfully");
+			httpd_resp_sendstr(req, "post successfully");
+			xSemaphoreGive(xMutex);
+
+			break; // done!
+		}
+		else
+		{
+			vTaskDelay(pdMS_TO_TICKS(250));
+		}
+	}
+
+
 	return ESP_OK;
 }
 
@@ -362,34 +395,54 @@ static esp_err_t TargetTemperature_post_handler(httpd_req_t *req)
     char buf[10];
     int  ret;
     char outbuf[50];
+    int val;
+
 	ESP_LOGI(TAG, "TargetTemperature_post_handler req->uri=[%s]", req->uri);
 
-    /* Read data received in the request */
-    ret = httpd_req_recv(req, buf, sizeof(buf));
-    if (ret <= 0) {
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            httpd_resp_send_408(req);
-        }
-        return ESP_FAIL;
-    }
-    buf[ret] = '\0';
-    int val = atoi(buf);
-
-	// Send to http_server_task
-	memcpy(to_send.data,"TargetTemp triggered", 32);
-
-	if (xQueueSend(xQueueHttp, &to_send.data[0], portMAX_DELAY) != pdPASS) {
-		ESP_LOGE(TAG, "xQueueSend Fail");
-	}
-
-	// val contains the number requested by the user from the browser...
-	ret = Temp_set_target_temp(val);
-	if(ret != ESP_OK)
+	while(1)
 	{
-		httpd_resp_send(req,"Invalid temp value!",HTTPD_RESP_USE_STRLEN );
+		// Block until we get the semaphore...
+		if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE)
+		{
+			/* Read data received in the request */
+			ret = httpd_req_recv(req, buf, sizeof(buf));
+			if (ret <= 0)
+			{
+				if (ret == HTTPD_SOCK_ERR_TIMEOUT)
+				{
+					httpd_resp_send_408(req);
+				}
+				return ESP_FAIL;
+			}
+			buf[ret] = '\0';
+			// Send to http_server_task
+			memcpy(to_send.data, "TargetTemp triggered", 32);
+
+			if (xQueueSend(xQueueHttp, &to_send.data[0], portMAX_DELAY) != pdPASS)
+			{
+				ESP_LOGE(TAG, "xQueueSend Fail");
+			}
+			val = atoi(buf);
+			// val contains the number requested by the user from the browser...
+			ret = Temp_set_target_temp(val);
+			if (ret != ESP_OK)
+			{
+				httpd_resp_send(req, "Invalid temp value!", HTTPD_RESP_USE_STRLEN);
+			}
+			snprintf(outbuf, sizeof(outbuf), "%d", val); // just echo??
+			httpd_resp_send(req, outbuf, HTTPD_RESP_USE_STRLEN);
+			xSemaphoreGive(xMutex);
+
+			break; // done!
+		}
+		else
+		{
+			vTaskDelay(pdMS_TO_TICKS(250));
+		}
+
 	}
-    snprintf(outbuf, sizeof(outbuf),"%d", val);		// just echo??
-    httpd_resp_send(req, outbuf, HTTPD_RESP_USE_STRLEN);
+
+
     return ESP_OK;
 
 }
@@ -400,28 +453,49 @@ static esp_err_t TargetTempRange_post_handler(httpd_req_t *req)
     char buf[10];
     int  ret;
     char outbuf[50];
+    int val;
+
 	ESP_LOGI(TAG, "TargetTempRange_post_handler req->uri=[%s]", req->uri);
 
-    /* Read data received in the request */
-    ret = httpd_req_recv(req, buf, sizeof(buf));
-    if (ret <= 0) {
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            httpd_resp_send_408(req);
-        }
-        return ESP_FAIL;
-    }
-    buf[ret] = '\0';
-    int val = atoi(buf);
-
-	// val contains the number requested by the user from the browser...
-	ret = Temp_set_target_range(val);
-	if(ret != ESP_OK)
+	while(1)
 	{
-		httpd_resp_send(req,"Invalid temp range value!",HTTPD_RESP_USE_STRLEN );
+		// Block until we get the semaphore...
+		if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE)
+		{
+			/* Read data received in the request */
+			ret = httpd_req_recv(req, buf, sizeof(buf));
+			if (ret <= 0)
+			{
+				if (ret == HTTPD_SOCK_ERR_TIMEOUT)
+				{
+					httpd_resp_send_408(req);
+				}
+				return ESP_FAIL;
+			}
+			buf[ret] = '\0';
+			int val = atoi(buf);
+
+			// val contains the number requested by the user from the browser...
+			ret = Temp_set_target_range(val);
+			if (ret != ESP_OK)
+			{
+				httpd_resp_send(req, "Invalid temp range value!", HTTPD_RESP_USE_STRLEN);
+			}
+			snprintf(outbuf, sizeof(outbuf), "%d", val); // just echo??
+			httpd_resp_send(req, outbuf, HTTPD_RESP_USE_STRLEN);
+
+			xSemaphoreGive(xMutex);
+
+			break; // done!
+		}
+		else
+		{
+			vTaskDelay(pdMS_TO_TICKS(250));
+		}
+
 	}
-    snprintf(outbuf, sizeof(outbuf),"%d", val);		// just echo??
-    httpd_resp_send(req, outbuf, HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
+
+	return ESP_OK;
 
 }
 
@@ -432,18 +506,33 @@ esp_err_t data_handler(httpd_req_t *req)
 	int		val;
 	ESP_LOGI(TAG, "data_handler req->uri=[%s]", req->uri);
 
-    // Retrieve sensor data
-    //float temperature = read_sensor(); 
-	esp_err_t  ret;
-	ret = Temp_get_current_temp(&val);
-	if(ret != ESP_OK)
+	while(1)
 	{
-		ESP_LOGE(TAG, "error from Temp_get_current_temp ");
+		// Block until we get the semaphore...
+		if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE)
+		{
+			esp_err_t ret;
+			ret = Temp_get_current_temp(&val);
+			if (ret != ESP_OK)
+			{
+				ESP_LOGE(TAG, "error from Temp_get_current_temp ");
+			}
+			sprintf(data_str, "%d", val);
+
+			// Send data to browser
+			httpd_resp_send(req, data_str, HTTPD_RESP_USE_STRLEN);
+
+			xSemaphoreGive(xMutex);
+
+			break; // done!
+		}
+		else
+		{
+			vTaskDelay(pdMS_TO_TICKS(250));
+		}
+
 	}
-    sprintf(data_str, "%d", val);
-    
-    // Send data to browser
-    httpd_resp_send(req, data_str, HTTPD_RESP_USE_STRLEN);
+
     return ESP_OK;
 }
 
@@ -481,7 +570,6 @@ esp_err_t start_server(const char *base_path, int port)
 	};
 	httpd_register_uri_handler(server, &_root_get_handler);
 
-#if 1
 	/* URI handler for post */
 	httpd_uri_t _root_post_handler = {
 		.uri		 = "/post",
@@ -490,7 +578,6 @@ esp_err_t start_server(const char *base_path, int port)
 		//.user_ctx  = server_data	// Pass server data as context
 	};
 	httpd_register_uri_handler(server, &_root_post_handler);
-#endif
 
 	httpd_uri_t _TargetTemperature_post_handler = {
 		.uri		 = "TargetTemperature",
@@ -514,7 +601,7 @@ esp_err_t start_server(const char *base_path, int port)
 	};
 	httpd_register_uri_handler(server, &_get_data_handler);
 
-#if 1
+
 	/* URI handler for favicon.ico */
 	httpd_uri_t _favicon_get_handler = {
 		.uri		 = "/favicon.ico",
@@ -523,7 +610,7 @@ esp_err_t start_server(const char *base_path, int port)
 		//.user_ctx  = server_data	// Pass server data as context
 	};
 	httpd_register_uri_handler(server, &_favicon_get_handler);
-#endif
+
 	return ESP_OK;
 }
 
