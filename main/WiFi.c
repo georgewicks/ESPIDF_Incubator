@@ -349,18 +349,41 @@ typedef struct {
 static esp_err_t root_post_handler(httpd_req_t *req)
 {
 	ESP_LOGI(TAG, "root_post_handler req->uri=[%s]", req->uri);
-	URL_t urlBuf;
+	URL_t urlBuf, urlBuf2;
+	char	teststr[32];
+	int		retv, retv2;
 
 	// Locate the requested target temperature from the string: "TargetTemperature="+<temperature as a character string>
-	find_key_value("TargetTemperature=", (char *)req->uri, urlBuf.str_value_TargetTemperature);
-	ESP_LOGD(TAG, "urlBuf.str_value_red=[%s]", urlBuf.str_value_TargetTemperature);
+	retv = find_key_value("TargetTemperature=", (char *)req->uri, urlBuf.str_value_TargetTemperature);
+	ESP_LOGD(TAG, "urlBuf.str_value_TargetTemperature=[%s]", urlBuf.str_value_TargetTemperature);
+	
+	ESP_LOGI(TAG, "retv for TargetTemperature = %d", retv);
 
-	urlBuf.long_value_TargetTemperature = strtol(urlBuf.str_value_TargetTemperature, NULL, 10);
-	ESP_LOGD(TAG, "urlBuf.long_value_red=%ld", urlBuf.long_value_TargetTemperature);
+	// fake string
+	retv2 = find_key_value("TempBand=", (char *)req->uri, teststr);
+	ESP_LOGD(TAG, "urlBuf2.str_value_TargetTemperature=[%s]", urlBuf2.str_value_TargetTemperature);
+	
+	ESP_LOGI(TAG, "retv for TempBand = %d", retv2);
 
-	// Send to http_server_task
-	if (xQueueSend(xQueueHttp, &urlBuf, portMAX_DELAY) != pdPASS) {
-		ESP_LOGE(TAG, "xQueueSend Fail");
+	if (retv)
+	{
+		urlBuf.long_value_TargetTemperature = strtol(urlBuf.str_value_TargetTemperature, NULL, 10);
+		ESP_LOGD(TAG, "urlBuf.long_value_TargetTemperature=%ld", urlBuf.long_value_TargetTemperature);
+		// Send to http_server_task
+		if (xQueueSend(xQueueHttp, &urlBuf, portMAX_DELAY) != pdPASS)
+		{
+			ESP_LOGE(TAG, "xQueueSend Fail");
+		}
+	}
+	else if (retv2)
+	{
+		urlBuf2.long_value_TargetTemperature = strtol(urlBuf2.str_value_TargetTemperature, NULL, 10);
+		ESP_LOGD(TAG, "url2Buf.long_value_TargetTemperature=%ld", urlBuf2.long_value_TargetTemperature);
+		// Send to http_server_task
+		if (xQueueSend(xQueueHttp, &urlBuf2, portMAX_DELAY) != pdPASS)
+		{
+			ESP_LOGE(TAG, "xQueueSend Fail");
+		}
 	}
 
 	while(1)
@@ -514,25 +537,6 @@ esp_err_t data_handler(httpd_req_t *req)
 		if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE)
 		{	
 			URL_t urlBuf;
-#if 0			
-typedef struct {
-	char str_value_TargetTemperature[4];
-	long long_value_TargetTemperature;
-} URL_t;
-#endif
-
-			// Locate the requested target temperature from the string: "TargetTemperature="+<temperature as a character string>
-//			find_key_value("TargetTemperature=", (char *)req->uri, urlBuf.str_value_TargetTemperature);
-//			ESP_LOGD(TAG, "urlBuf.str_value_red=[%s]", urlBuf.str_value_TargetTemperature);
-
-//			urlBuf.long_value_TargetTemperature = strtol(urlBuf.str_value_TargetTemperature, NULL, 10);
-//			ESP_LOGD(TAG, "urlBuf.long_value_red=%ld", urlBuf.long_value_TargetTemperature);
-
-//			// Send to http_server_task
-//			if (xQueueSend(xQueueHttp, &urlBuf, portMAX_DELAY) != pdPASS)
-//			{
-//				ESP_LOGE(TAG, "xQueueSend Fail");
-//			}
 
 			esp_err_t ret;
 			ret = Temp_get_current_temp(&val);
