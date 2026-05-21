@@ -341,9 +341,15 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 }
 
 /* HTTP post handler */
+
+// 1 means TargetTemp, 2 means TempBand
+#define		TARGTEMP		1
+#define		TEMPBAND		2
+
 typedef struct {
-	char str_value_TargetTemperature[4];
-	long long_value_TargetTemperature;
+	int		TempType;							// 1 means TargetTemp, 2 means TempBand
+	char 	str_value_Temp[4];
+	long 	long_value_Temp;
 } URL_t;
 
 static esp_err_t root_post_handler(httpd_req_t *req)
@@ -353,38 +359,42 @@ static esp_err_t root_post_handler(httpd_req_t *req)
 	char	teststr[32];
 	int		retv, retv2;
 
+	// This function will be overloaded to handle TargetTemperature as well as TemperatureBand!
+
 	// Locate the requested target temperature from the string: "TargetTemperature="+<temperature as a character string>
-	retv = find_key_value("TargetTemperature=", (char *)req->uri, urlBuf.str_value_TargetTemperature);
-	ESP_LOGD(TAG, "urlBuf.str_value_TargetTemperature=[%s]", urlBuf.str_value_TargetTemperature);
-	
-	ESP_LOGI(TAG, "retv for TargetTemperature = %d", retv);
-
-	// fake string
-	retv2 = find_key_value("TempBand=", (char *)req->uri, teststr);
-	ESP_LOGD(TAG, "urlBuf2.str_value_TargetTemperature=[%s]", urlBuf2.str_value_TargetTemperature);
-	
-	ESP_LOGI(TAG, "retv for TempBand = %d", retv2);
-
-	if (retv)
+	retv = find_key_value("TargetTemperature=", (char *)req->uri, urlBuf.str_value_Temp);
+	if(retv)
 	{
-		urlBuf.long_value_TargetTemperature = strtol(urlBuf.str_value_TargetTemperature, NULL, 10);
-		ESP_LOGD(TAG, "urlBuf.long_value_TargetTemperature=%ld", urlBuf.long_value_TargetTemperature);
+		ESP_LOGD(TAG, "urlBuf.str_value_Temp=[%s]", urlBuf.str_value_Temp);	
+		ESP_LOGI(TAG, "retv for TargetTemperature = %d", retv);
+		urlBuf.TempType = TARGTEMP;
+		urlBuf.long_value_Temp = strtol(urlBuf.str_value_Temp, NULL, 10);
+		ESP_LOGD(TAG, "urlBuf.long_value_Temp=%ld", urlBuf.long_value_Temp);
 		// Send to http_server_task
 		if (xQueueSend(xQueueHttp, &urlBuf, portMAX_DELAY) != pdPASS)
 		{
 			ESP_LOGE(TAG, "xQueueSend Fail");
 		}
 	}
-	else if (retv2)
+	else
 	{
-		urlBuf2.long_value_TargetTemperature = strtol(urlBuf2.str_value_TargetTemperature, NULL, 10);
-		ESP_LOGD(TAG, "url2Buf.long_value_TargetTemperature=%ld", urlBuf2.long_value_TargetTemperature);
-		// Send to http_server_task
-		if (xQueueSend(xQueueHttp, &urlBuf2, portMAX_DELAY) != pdPASS)
+		// Locate the requested target temperature from the string: "TargetBand="+<temperature as a character string>
+		retv2 = find_key_value("TempBand=", (char *)req->uri, urlBuf2.str_value_Temp);
+		if (retv2)
 		{
-			ESP_LOGE(TAG, "xQueueSend Fail");
+			ESP_LOGD(TAG, "urlBuf2.str_value_Temp=[%s]", urlBuf2.str_value_Temp);
+			ESP_LOGI(TAG, "retv for TempBand = %d", retv2);
+			urlBuf2.TempType = TEMPBAND;
+			urlBuf2.long_value_Temp = strtol(urlBuf2.str_value_Temp, NULL, 10);
+			ESP_LOGD(TAG, "url2Buf.long_value_Temp=%ld", urlBuf2.long_value_Temp);
+			// Send to http_server_task
+			if (xQueueSend(xQueueHttp, &urlBuf2, portMAX_DELAY) != pdPASS)
+			{
+				ESP_LOGE(TAG, "xQueueSend Fail");
+			}
 		}
 	}
+
 
 	while(1)
 	{
@@ -412,7 +422,7 @@ static esp_err_t root_post_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
-
+#if 0
 // The HTTP POST handlers
 // Update Target temperature
 static esp_err_t TargetTemperature_post_handler(httpd_req_t *req)
@@ -429,6 +439,7 @@ static esp_err_t TargetTemperature_post_handler(httpd_req_t *req)
 		// Block until we get the semaphore...
 		if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100)) == pdTRUE)
 		{
+			ESP_LOGI(TAG,"Recvd semaphore");
 			/* Read data received in the request */
 			ret = httpd_req_recv(req, buf, sizeof(buf));
 			if (ret <= 0)
@@ -523,6 +534,7 @@ static esp_err_t TargetTempRange_post_handler(httpd_req_t *req)
 	return ESP_OK;
 
 }
+#endif
 
 // data handler for the CurrentTemperature
 esp_err_t data_handler(httpd_req_t *req) 
@@ -546,20 +558,21 @@ esp_err_t data_handler(httpd_req_t *req)
 			}
 			sprintf(data_str, "%d", val);
 
-			memcpy( urlBuf.str_value_TargetTemperature, data_str, 2);
-			urlBuf.long_value_TargetTemperature = (long)val;
+			memcpy( urlBuf.str_value_Temp, data_str, 2);
+			urlBuf.long_value_Temp = (long)val;
 
 			ESP_LOGI(TAG, " data_str = %s, length = %d", data_str, strlen(data_str));
 
 			// Send to http_server_task
 			//memcpy(to_send.data, "TargetTemp triggered", 32);
 			//memcpy(to_send.data,data_str,strlen(data_str));
-
+/*
 			//if (xQueueSend(xQueueHttp, &to_send.data[0], portMAX_DELAY) != pdPASS)
-			if (xQueueSend(xQueueHttp, &urlBuf.str_value_TargetTemperature[0], portMAX_DELAY) != pdPASS)
+			if (xQueueSend(xQueueHttp, &urlBuf.str_value_Temp[0], portMAX_DELAY) != pdPASS)
 			{
 				ESP_LOGE(TAG, "xQueueSend Fail");
 			}
+ */
 
 			// Send data to browser
 			httpd_resp_send(req, data_str, HTTPD_RESP_USE_STRLEN);
@@ -621,6 +634,7 @@ esp_err_t start_server(const char *base_path, int port)
 	};
 	httpd_register_uri_handler(server, &_root_post_handler);
 
+#if 0
 	httpd_uri_t _TargetTemperature_post_handler = {
 		.uri		 = "TargetTemperature",
 		.method		 = HTTP_POST,
@@ -634,6 +648,7 @@ esp_err_t start_server(const char *base_path, int port)
 		.handler	 = TargetTempRange_post_handler,
 	};
 	httpd_register_uri_handler(server, &_TargetTempRange_post_handler);
+#endif
 
 	// Current temperature will be sent to the browser from this handler.
 	httpd_uri_t _get_data_handler = {
@@ -671,11 +686,20 @@ void http_server_task(void *pvParameters)
 		// Waiting for post - blocks indefinitely...
 		if (xQueueReceive(xQueueHttp, &urlBuf, portMAX_DELAY) == pdTRUE) 
 		{
-			ESP_LOGI(TAG,"Recvd: str_value_TargetTemperature = %s, long_value_TargetTemperature = %d ", 
-						urlBuf.str_value_TargetTemperature, urlBuf.long_value_TargetTemperature);
-
-			desiredTemperature = urlBuf.long_value_TargetTemperature;
-
+			//ESP_LOGI(TAG)
+			ESP_LOGI(TAG,"---->>> Recvd: TempType = %d,str_value_Temp = %s, long_value_Temp = %d ", 
+						urlBuf.TempType,
+						urlBuf.str_value_Temp, urlBuf.long_value_Temp);
+			if(urlBuf.TempType == 1)
+			{
+				ESP_LOGI(TAG, "Change in target temp");
+				desiredTemperature = urlBuf.long_value_Temp;
+			}
+			else if(urlBuf.TempType == 2)
+			{
+				ESP_LOGI(TAG, "Change temp band");
+				hysteresisBand = urlBuf.long_value_Temp;
+			}
 		}
 	}
 
