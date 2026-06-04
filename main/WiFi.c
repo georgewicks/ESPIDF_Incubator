@@ -53,7 +53,7 @@ static const char *TAG = "WiFi";	//TAG for debug
 static esp_err_t favicon_get_handler(httpd_req_t *req);
  
 extern int PWR5V_PIN;
-extern int	PWR12V_PIN;
+extern int	HEAT_IND_PIN;
 
 extern float   desiredTemperature;
 extern float   hysteresisBand;

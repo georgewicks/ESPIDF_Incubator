@@ -62,7 +62,7 @@ extern void http_server_task(void *pvParameters);
 
 // MOSFET switches for heating element and fan
 extern int   PWR5V_PIN;
-extern int	 PWR12V_PIN;
+extern int	 HEAT_IND_PIN;
 
 /*----------------------------------------------------------------*/
 
@@ -239,8 +239,8 @@ void app_main() {
 	ESP_LOGI(TAG, "%s: setting up GPIO", __FILE__);
 	esp_rom_gpio_pad_select_gpio(PWR5V_PIN);
 	gpio_set_direction(PWR5V_PIN, GPIO_MODE_OUTPUT);
-	esp_rom_gpio_pad_select_gpio(PWR12V_PIN);
-	gpio_set_direction(PWR12V_PIN, GPIO_MODE_OUTPUT);
+	esp_rom_gpio_pad_select_gpio(HEAT_IND_PIN);
+	gpio_set_direction(HEAT_IND_PIN, GPIO_MODE_OUTPUT);
 
 	ESP_LOGI(TAG, "%s: starting TempControl ", __FILE__);
 	

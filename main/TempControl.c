@@ -38,7 +38,7 @@ float turnOnThreshold;  // = desiredTemperature - hysteresisBand;
 float turnOffThreshold; 	// = desiredTemperature + hysteresisBand;
 
 int PWR5V_PIN = 16;
-int	PWR12V_PIN = 17;
+int	HEAT_IND_PIN = 17;
 
 static const char *TAG = "TempControl";	//TAG for debug
 
@@ -54,12 +54,14 @@ void 	TurnOnHeater(void)
 {
 	ESP_LOGI(TAG,"TurnOnHeater");
 	gpio_set_level(PWR5V_PIN,1);
+    gpio_set_level(HEAT_IND_PIN,1);
 }
 
 void 	TurnOffHeater(void)
 {
 	ESP_LOGI(TAG,"TurnOffHeater");
 	gpio_set_level(PWR5V_PIN,0);
+    gpio_set_level(HEAT_IND_PIN,0);
 }
 
 // request for new value
