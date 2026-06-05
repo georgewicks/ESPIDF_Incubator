@@ -52,7 +52,7 @@ static const char *TAG = "WiFi";	//TAG for debug
 
 static esp_err_t favicon_get_handler(httpd_req_t *req);
  
-extern int PWR5V_PIN;
+extern int HEATING_ELEMENT_PIN;
 extern int	HEAT_IND_PIN;
 
 extern float   desiredTemperature;
@@ -365,11 +365,11 @@ static esp_err_t root_post_handler(httpd_req_t *req)
 	retv = find_key_value("TargetTemperature=", (char *)req->uri, urlBuf.str_value_Temp);
 	if(retv)
 	{
-		ESP_LOGD(TAG, "urlBuf.str_value_Temp=[%s]", urlBuf.str_value_Temp);	
-		ESP_LOGI(TAG, "retv for TargetTemperature = %d", retv);
+		//ESP_LOGD(TAG, "urlBuf.str_value_Temp=[%s]", urlBuf.str_value_Temp);	
+		//ESP_LOGI(TAG, "retv for TargetTemperature = %d", retv);
 		urlBuf.TempType = TARGTEMP;
 		urlBuf.long_value_Temp = strtol(urlBuf.str_value_Temp, NULL, 10);
-		ESP_LOGD(TAG, "urlBuf.long_value_Temp=%ld", urlBuf.long_value_Temp);
+		//ESP_LOGD(TAG, "urlBuf.long_value_Temp=%ld", urlBuf.long_value_Temp);
 		// Send to http_server_task
 		if (xQueueSend(xQueueHttp, &urlBuf, portMAX_DELAY) != pdPASS)
 		{
@@ -382,11 +382,11 @@ static esp_err_t root_post_handler(httpd_req_t *req)
 		retv2 = find_key_value("TempBand=", (char *)req->uri, urlBuf2.str_value_Temp);
 		if (retv2)
 		{
-			ESP_LOGD(TAG, "urlBuf2.str_value_Temp=[%s]", urlBuf2.str_value_Temp);
-			ESP_LOGI(TAG, "retv for TempBand = %d", retv2);
+			//ESP_LOGD(TAG, "urlBuf2.str_value_Temp=[%s]", urlBuf2.str_value_Temp);
+			//ESP_LOGI(TAG, "retv for TempBand = %d", retv2);
 			urlBuf2.TempType = TEMPBAND;
 			urlBuf2.long_value_Temp = strtol(urlBuf2.str_value_Temp, NULL, 10);
-			ESP_LOGD(TAG, "url2Buf.long_value_Temp=%ld", urlBuf2.long_value_Temp);
+			//ESP_LOGD(TAG, "url2Buf.long_value_Temp=%ld", urlBuf2.long_value_Temp);
 			// Send to http_server_task
 			if (xQueueSend(xQueueHttp, &urlBuf2, portMAX_DELAY) != pdPASS)
 			{
@@ -561,7 +561,7 @@ esp_err_t data_handler(httpd_req_t *req)
 			memcpy( urlBuf.str_value_Temp, data_str, 2);
 			urlBuf.long_value_Temp = (long)val;
 
-			ESP_LOGI(TAG, " data_str = %s, length = %d", data_str, strlen(data_str));
+			//ESP_LOGI(TAG, " data_str = %s, length = %d", data_str, strlen(data_str));
 
 			// Send to http_server_task
 			//memcpy(to_send.data, "TargetTemp triggered", 32);
@@ -687,9 +687,11 @@ void http_server_task(void *pvParameters)
 		if (xQueueReceive(xQueueHttp, &urlBuf, portMAX_DELAY) == pdTRUE) 
 		{
 			//ESP_LOGI(TAG)
+			/*
 			ESP_LOGI(TAG,"---->>> Recvd: TempType = %d,str_value_Temp = %s, long_value_Temp = %d ", 
 						urlBuf.TempType,
 						urlBuf.str_value_Temp, urlBuf.long_value_Temp);
+			*/
 			if(urlBuf.TempType == 1)
 			{
 				ESP_LOGI(TAG, "Change in target temp");

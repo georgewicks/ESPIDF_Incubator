@@ -43,7 +43,7 @@
       xhttp.open("POST", "/post?TempBand="+TempSliderValue, true);
       xhttp.send();
     }
-    setInterval(function() { getData(); }, 20000); 
+    setInterval(function() { getData(); }, 2000); 
     function getData() {
       var xhttp = new XMLHttpRequest();
       xhttp.onreadystatechange = function() {

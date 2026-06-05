@@ -18,6 +18,7 @@
 #include "driver/i2c_master.h"
 #endif
 
+#include "driver/ledc.h"            // need PWM control of heating element, using LEDC driver.
 #include "driver/gpio.h"
 #include "mcp9808.h"
 
@@ -37,7 +38,7 @@ esp_err_t   Temp_set_target_range( int val );
 float turnOnThreshold;  // = desiredTemperature - hysteresisBand;
 float turnOffThreshold; 	// = desiredTemperature + hysteresisBand;
 
-int PWR5V_PIN = 16;
+int HEATING_ELEMENT_PIN = 16;
 int	HEAT_IND_PIN = 17;
 
 static const char *TAG = "TempControl";	//TAG for debug
@@ -53,16 +54,187 @@ HeaterState heaterState = OFF; // Initial heater state
 void 	TurnOnHeater(void)
 {
 	ESP_LOGI(TAG,"TurnOnHeater");
-	gpio_set_level(PWR5V_PIN,1);
+	gpio_set_level(HEATING_ELEMENT_PIN,1);
     gpio_set_level(HEAT_IND_PIN,1);
+    LEDC_PWM_start_heatstate_machine();
 }
 
 void 	TurnOffHeater(void)
 {
 	ESP_LOGI(TAG,"TurnOffHeater");
-	gpio_set_level(PWR5V_PIN,0);
+	gpio_set_level(HEATING_ELEMENT_PIN,0);
     gpio_set_level(HEAT_IND_PIN,0);
+    LEDC_PWM_stop_heatstate_machine();
 }
+
+// --------------------------------------------------------------------------------
+// LEDC PWM applied to Heating Control.
+// --------------------------------------------------------------------------------
+
+ledc_timer_config_t ledc_timer = {
+    .speed_mode       = LEDC_LOW_SPEED_MODE,
+    .timer_num        = LEDC_TIMER_0,
+    .duty_resolution  = LEDC_TIMER_10_BIT, // 10-bit resolution (0 to 1023)
+    .freq_hz          = 5000,              // 5 kHz frequency
+    .clk_cfg          = LEDC_AUTO_CLK
+};
+
+ledc_channel_config_t ledc_channel = {
+    .speed_mode     = LEDC_LOW_SPEED_MODE,
+    .channel        = LEDC_CHANNEL_0,
+    .timer_sel      = LEDC_TIMER_0,
+    .intr_type      = LEDC_INTR_DISABLE,
+    .gpio_num       = HEATING_ELEMENT_PIN,  // Adjust to your desired GPIO
+    .duty           = 0,                    // Initial duty cycle (0 = OFF)
+    .hpoint         = 0
+};
+
+// Setup of the LEDC PWM handling
+esp_err_t   LEDC_PWM_Temp_Setup( void )
+{
+    esp_err_t   retval = ESP_OK;
+
+    retval = ledc_timer_config(&ledc_timer);
+    if(retval != ESP_OK)
+    {
+        ESP_LOGE(TAG, " error from ledc_timer_config = %d(%s)", retval, esp_err_to_name(retval));
+        while(1)
+        {
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+        }
+    }
+    retval = ledc_channel_config(&ledc_channel);
+    if(retval != ESP_OK)
+    {
+        ESP_LOGE(TAG, " error from ledc_channel_config = %d(%s)", retval, esp_err_to_name(retval));
+        while(1)
+        {
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+        }
+    }
+
+    return retval;
+}
+
+// Define states for the heater
+typedef enum _LEDC_PWM_HeaterState
+{
+    INIT_HEAT = 0,
+    RAMPUP_HEAT,
+    PLATEAU_HEAT,
+    RAMPDOWN_HEAT
+} LEDC_PWM_HeaterState;
+
+#define DO_NOTHING      (-1)
+
+LEDC_PWM_HeaterState LEDCPWM_heaterState = INIT_HEAT;     // Initial heater state
+
+int    RampupCount = 0;
+int    RampdownCount = 4;
+
+void LEDCPWN_startRampUp(void)
+{
+    ESP_LOGI(TAG," LEDCPWN_startRampUp");
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 128));   //  12.5% Duty cycle 
+    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+    RampupCount++;
+}
+
+void LEDCPWN_startRampDown(void)
+{
+    ESP_LOGI(TAG," LEDCPWN_startRampDown");
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 128*RampdownCount));   //  12.5% Duty cycle 
+    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+    RampdownCount--;
+}
+
+// In the code, we will have to find what action to take upon new temperature sensor reading. 
+// Based on that, we will need to determine what actions do we take? We'll need to know what 
+// PWM heating state the state machine says (e..g., INIT_HEAT, RAMPUP_HEAT, etc.).
+int NextTemperatureAction( float temperature )
+{
+    int     TempAction = DO_NOTHING;
+
+    switch(LEDCPWM_heaterState)
+    {
+        case  INIT_HEAT:
+            ESP_LOGI(TAG, "LEDCPWM_heaterState == INIT_HEAT, temperature = %f", temperature);
+            // If the current temp is less than turnOnThreshold, then switch
+            // the LEDCPWM_heaterState to RAMPUP_HEAT
+            if(temperature < turnOnThreshold)
+            {
+                LEDCPWM_heaterState = RAMPUP_HEAT;
+                LEDCPWN_startRampUp();
+            }
+            break;
+        case  RAMPUP_HEAT:
+            ESP_LOGI(TAG, "LEDCPWM_heaterState == RAMPUP_HEAT, temperature = %f", temperature);
+            // Check if current temp is still less than turnOnThreshold, and if so
+            // check if RampupCount < 4, continue ramp up, increment RampupCount
+            if(temperature < turnOnThreshold)
+            {
+                if (RampupCount < 4)
+                {
+                    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 128 * RampupCount)); //  12.5% Duty cycle
+                    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+                }
+                else if(RampupCount == 4)
+                {
+                    // we've reached the Plateau - leave
+                    LEDCPWM_heaterState = PLATEAU_HEAT;
+                }
+            }
+            else if(temperature >= turnOnThreshold && temperature < turnOffThreshold)
+            {
+                // the incubator has reached sufficient internal temperature - change state to Plateau
+                // until temperature becomes greater than turnOffThreshold
+                LEDCPWM_heaterState = PLATEAU_HEAT;
+            }
+            else if(temperature >= turnOnThreshold && temperature > turnOffThreshold)
+            {
+                // The temperature has surpassed both turnOnThreshold & turnOffThreshold, so now
+                // we flip back to a Rampdown procedure. This also indicates that the heating element
+                // PWM values are to high, and should be adjusted.
+                LEDCPWM_heaterState = RAMPDOWN_HEAT;
+            }
+            break;
+        case  PLATEAU_HEAT:
+            ESP_LOGI(TAG, "LEDCPWM_heaterState == PLATEAU_HEAT, temperature = %f", temperature);
+            // If the temperature is greater than the turnOffThreshold, switch to RAMPDOWN
+            if(temperature > turnOffThreshold)
+            {
+                LEDCPWM_heaterState = RAMPDOWN_HEAT;
+            }
+            break;
+        case  RAMPDOWN_HEAT:
+            ESP_LOGI(TAG, "LEDCPWM_heaterState == RAMPDOWN_HEAT, temperature = %f", temperature);
+            if(RampdownCount == 4)
+            {
+                LEDCPWN_startRampDown();
+            }
+            else
+            {
+                ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 128 * RampdownCount)); 
+                ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));   
+            }
+            RampdownCount--;
+            if(!RampdownCount)
+            {
+                LEDCPWM_heaterState = INIT_HEAT;
+                RampdownCount = 4;                  // Reset
+                RampupCount = 0;                    // Reset
+            }
+            // ??
+            break;
+        default:
+            ESP_LOGE(TAG, "invalid state = %d", LEDCPWM_heaterState);
+            break;
+
+    }
+}
+
+// --------------------------------------------------------------------------------
+
 
 // request for new value
 esp_err_t   Temp_set_target_temp( int val )
@@ -128,12 +300,11 @@ void TempControl(void *pvParameters)
         esp_err_t ret = MCP9808_ambient_temp(handle, &res);
         if(ret != ESP_OK)
         {
-            ESP_LOGI(TAG,"Error from MCP9808_ambient_temp = %s",esp_err_to_name(ret));
+            ESP_LOGE(TAG,"Error from MCP9808_ambient_temp = %s",esp_err_to_name(ret));
         }
         else
         {
             ESP_LOGI(TAG, "Temperature is %f C (%f F)", res, (res*9)/5 + 32);
-
         }
 
         CurrentTemp = res;
@@ -163,7 +334,7 @@ void TempControl(void *pvParameters)
 			}
 		}
 
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(2000));
 
     }
 
