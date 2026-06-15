@@ -541,7 +541,7 @@ esp_err_t data_handler(httpd_req_t *req)
 {
     char 	data_str[50];
 	int		val;
-	ESP_LOGI(TAG, "data_handler req->uri=[%s]", req->uri);
+	//ESP_LOGI(TAG, "data_handler req->uri=[%s]", req->uri);
 
 	while(1)
 	{
@@ -696,11 +696,22 @@ void http_server_task(void *pvParameters)
 			{
 				ESP_LOGI(TAG, "Change in target temp");
 				desiredTemperature = urlBuf.long_value_Temp;
+				// Need to tell the system to update the Target temperature!
+				esp_err_t  eval = Temp_set_target_temp(desiredTemperature);
+				if(eval != ESP_OK)
+				{
+					ESP_LOGE(TAG," error from Temp_set_target_temp=%d(%s)",eval,esp_err_to_name(eval));
+				}
 			}
 			else if(urlBuf.TempType == 2)
 			{
 				ESP_LOGI(TAG, "Change temp band");
 				hysteresisBand = urlBuf.long_value_Temp;
+				esp_err_t  eval = Temp_set_target_range(hysteresisBand);
+				if(eval != ESP_OK)
+				{
+					ESP_LOGE(TAG," error from Temp_set_target_range=%d(%s)",eval,esp_err_to_name(eval));
+				}
 			}
 		}
 	}

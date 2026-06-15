@@ -38,7 +38,7 @@ esp_err_t   Temp_set_target_range( int val );
 float turnOnThreshold;  // = desiredTemperature - hysteresisBand;
 float turnOffThreshold; 	// = desiredTemperature + hysteresisBand;
 
-int HEATING_ELEMENT_PIN = 16;
+const int HEATING_ELEMENT_PIN = 16;
 int	HEAT_IND_PIN = 17;
 
 static const char *TAG = "TempControl";	//TAG for debug
@@ -56,7 +56,6 @@ void 	TurnOnHeater(void)
 	ESP_LOGI(TAG,"TurnOnHeater");
 	gpio_set_level(HEATING_ELEMENT_PIN,1);
     gpio_set_level(HEAT_IND_PIN,1);
-    LEDC_PWM_start_heatstate_machine();
 }
 
 void 	TurnOffHeater(void)
@@ -64,7 +63,6 @@ void 	TurnOffHeater(void)
 	ESP_LOGI(TAG,"TurnOffHeater");
 	gpio_set_level(HEATING_ELEMENT_PIN,0);
     gpio_set_level(HEAT_IND_PIN,0);
-    LEDC_PWM_stop_heatstate_machine();
 }
 
 // --------------------------------------------------------------------------------
@@ -151,9 +149,8 @@ void LEDCPWN_startRampDown(void)
 // In the code, we will have to find what action to take upon new temperature sensor reading. 
 // Based on that, we will need to determine what actions do we take? We'll need to know what 
 // PWM heating state the state machine says (e..g., INIT_HEAT, RAMPUP_HEAT, etc.).
-int NextTemperatureAction( float temperature )
+void NextTemperatureAction( float temperature )
 {
-    int     TempAction = DO_NOTHING;
 
     switch(LEDCPWM_heaterState)
     {
@@ -163,6 +160,8 @@ int NextTemperatureAction( float temperature )
             // the LEDCPWM_heaterState to RAMPUP_HEAT
             if(temperature < turnOnThreshold)
             {
+                ESP_LOGI(TAG, "temperature=%f,turnOnThreshold=%f",temperature,turnOnThreshold);
+                TurnOnHeater();                         // signal with the LED
                 LEDCPWM_heaterState = RAMPUP_HEAT;
                 LEDCPWN_startRampUp();
             }
@@ -173,9 +172,12 @@ int NextTemperatureAction( float temperature )
             // check if RampupCount < 4, continue ramp up, increment RampupCount
             if(temperature < turnOnThreshold)
             {
+                ESP_LOGI(TAG, "temperature=%f,turnOnThreshold=%f",temperature,turnOnThreshold);
                 if (RampupCount < 4)
                 {
-                    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 128 * RampupCount)); //  12.5% Duty cycle
+                    ESP_LOGI(TAG,"RampupCount=%d",RampupCount);
+                    RampupCount++;
+                    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 128 * RampupCount)); 
                     ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
                 }
                 else if(RampupCount == 4)
@@ -195,11 +197,12 @@ int NextTemperatureAction( float temperature )
                 // The temperature has surpassed both turnOnThreshold & turnOffThreshold, so now
                 // we flip back to a Rampdown procedure. This also indicates that the heating element
                 // PWM values are to high, and should be adjusted.
+                RampdownCount = 4;              // reset 
                 LEDCPWM_heaterState = RAMPDOWN_HEAT;
             }
             break;
         case  PLATEAU_HEAT:
-            ESP_LOGI(TAG, "LEDCPWM_heaterState == PLATEAU_HEAT, temperature = %f", temperature);
+            ESP_LOGI(TAG, "LEDCPWM_heaterState == PLATEAU_HEAT, temperature = %f,turnOffThreshold=%f ", temperature,turnOffThreshold);
             // If the temperature is greater than the turnOffThreshold, switch to RAMPDOWN
             if(temperature > turnOffThreshold)
             {
@@ -207,7 +210,7 @@ int NextTemperatureAction( float temperature )
             }
             break;
         case  RAMPDOWN_HEAT:
-            ESP_LOGI(TAG, "LEDCPWM_heaterState == RAMPDOWN_HEAT, temperature = %f", temperature);
+            ESP_LOGI(TAG, "LEDCPWM_heaterState == RAMPDOWN_HEAT, temperature = %f,turnOffThreshold=%f ", temperature,turnOffThreshold);
             if(RampdownCount == 4)
             {
                 LEDCPWN_startRampDown();
@@ -218,10 +221,15 @@ int NextTemperatureAction( float temperature )
                 ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));   
             }
             RampdownCount--;
+            ESP_LOGI(TAG,"RampdownCount=%d",RampdownCount);
             if(!RampdownCount)
             {
-                LEDCPWM_heaterState = INIT_HEAT;
-                RampdownCount = 4;                  // Reset
+                TurnOffHeater();
+                // NO!! Do not reset RampdownCount! 
+                //  RampdownCount = 4;                  // Reset
+                ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));     // No power for PWM is what we need. 
+                ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));   
+                LEDCPWM_heaterState = INIT_HEAT;    // reset to start.
                 RampupCount = 0;                    // Reset
             }
             // ??
@@ -261,7 +269,7 @@ esp_err_t   Temp_set_target_range( int val )
 
 esp_err_t   Temp_get_current_temp( int *val)
 {
-    ESP_LOGI(TAG,"Temp_get_current_temp called");
+    //ESP_LOGI(TAG,"Temp_get_current_temp called");
     *val = (int)CurrentTemp;
     return ESP_OK;
 }
@@ -287,6 +295,16 @@ void TempControl(void *pvParameters)
         }
     }
 
+    esp_err_t retv = LEDC_PWM_Temp_Setup();
+    if(retv != ESP_OK)
+    {
+        ESP_LOGE(TAG, "LEDC_PWM_Temp_Setup return %d(%s) ", retv, esp_err_to_name(retv));
+        while(1)
+        {
+            vTaskDelay(1000);
+        }
+    }
+
 	turnOnThreshold = desiredTemperature - hysteresisBand;
 	turnOffThreshold = desiredTemperature + hysteresisBand;
 
@@ -304,7 +322,7 @@ void TempControl(void *pvParameters)
         }
         else
         {
-            ESP_LOGI(TAG, "Temperature is %f C (%f F)", res, (res*9)/5 + 32);
+            // ESP_LOGI(TAG, "Temperature is %f C (%f F)", res, (res*9)/5 + 32);
         }
 
         CurrentTemp = res;
@@ -314,6 +332,7 @@ void TempControl(void *pvParameters)
 	    turnOnThreshold = desiredTemperature - hysteresisBand;
 	    turnOffThreshold = desiredTemperature + hysteresisBand;
 
+#ifdef  USE_SIMPLE_HYSTERESIS
 		// Hysteresis logic
 		if (heaterState == OFF)
 		{
@@ -333,8 +352,10 @@ void TempControl(void *pvParameters)
 				TurnOffHeater();
 			}
 		}
-
-        vTaskDelay(pdMS_TO_TICKS(2000));
+#else
+        NextTemperatureAction(CurrentTemp);
+#endif
+        vTaskDelay(pdMS_TO_TICKS(10000));
 
     }
 
