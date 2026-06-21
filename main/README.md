@@ -12,3 +12,11 @@ Please see the "PWM Control of 12V Heating Element in the Incubator" in the docs
     * Step 3: Configure the Channel.  ("")
     * Step 4: Set (and change) the Duty Cycle. (see doc)
 
+# 2026-06-15 --- Need to add another temperature sensor to the system in order to better monitor the heating pad.
+
+Add a DS18b20 Onewire temperature sensor, and attach the probe directly on the surface of the heating pad. By getting a more precise temperature reading, we can better address what the PWM maximum values should be for the heating pad - we want to avoid any potential problems. 
+    * use GPIO 5 for the onewire. 
+    * add 4.7K ohm resistor between GPIO 5 and VCC (3.3v) - the pull-up resistor needed for onewire
+    * add the ds18b20 component from the esp-bsp folder to the Incubator project
+    * add the monitoring handling to the TempControl.c module.
+    * Create heating_pad_monitor branch git branch.

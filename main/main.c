@@ -33,6 +33,10 @@
 #include "driver/gpio.h"
 #include "mcp9808.h"
 
+// Use BME280 temp sensor for the heating pad
+#include "bmx280.h"
+#include "driver/i2c_types.h"
+
 #include "Incubator.h"
 
 QueueHandle_t xQueueHttp;
@@ -134,6 +138,51 @@ static void i2c_master_init(void)
 #endif
 }
 
+#if CONFIG_USE_I2C_MASTER_DRIVER
+
+esp_err_t bmx280_dev_init(bmx280_t** bmx280,i2c_master_bus_handle_t bus_handle)
+{
+    *bmx280 = bmx280_create_master(bus_handle);
+    if (!*bmx280) { 
+        ESP_LOGE("test", "Could not create bmx280 driver.");
+        return ESP_FAIL;
+    }
+    
+    ESP_ERROR_CHECK(bmx280_init(*bmx280));
+    bmx280_config_t bmx_cfg = BMX280_DEFAULT_CONFIG;
+    ESP_ERROR_CHECK(bmx280_configure(*bmx280, &bmx_cfg));
+    return ESP_OK;
+}
+
+#endif
+
+#ifdef	USE_DS18B20
+// -------------------------------------------------------------------------------------------
+// Onewire interface (needed for DS18B20 temp sensor)
+
+#define EXAMPLE_ONEWIRE_BUS_GPIO    0
+#define EXAMPLE_ONEWIRE_MAX_DS18B20 2
+
+ow_device_info_t device_info;
+ds18b20_bus_handle_t bus_handle;
+bool 	bOnewireDevFound = false;
+
+static void init_onewire(void)
+{
+    ESP_LOGI(TAG, "Initializing 1-Wire bus on GPIO %d", ONEWIRE_BUS_GPIO);
+
+    ESP_ERROR_CHECK(ds18b20_new_bus((ow_config_t){.gpio_num = ONEWIRE_BUS_GPIO}, &bus_handle));
+    
+    // Find devices on the bus (assuming one device for this example)
+    if (ds18b20_search_devices(bus_handle, &device_info, 1) == ESP_OK) {
+        ESP_LOGI(TAG, "Found DS18B20 device");
+		bOnewireDevFound = true;
+    } else {
+        ESP_LOGE(TAG, "No DS18B20 devices found.");
+		bOnewireDevFound = false;
+    }
+}
+#endif
 
 static void listSPIFFS(char * path) {
 	ESP_LOGI(TAG,"%s: called, path is %s ",__FILE__,path);
@@ -196,10 +245,12 @@ esp_err_t mountSPIFFS(char * path, char * label, int max_files) {
  * 
  */
 void app_main() {
+    float temp = 0, pres = 0, hum = 0;
+	int mcounter = 0;							// use a counter to limit debug statements
 
 	ESP_LOGI(TAG, "%s: called", __FILE__);
-	
-    xMutex = xSemaphoreCreateMutex();
+
+	xMutex = xSemaphoreCreateMutex();
 
 	// ESP_ERROR_CHECK(nvs_flash_init());
 	// Initialize NVS
@@ -212,7 +263,6 @@ void app_main() {
 	}
 	ESP_LOGI(TAG, " all done with nvs stuff");
 	ESP_ERROR_CHECK(ret);
-
 		
 	ESP_LOGI(TAG,"calling wifi_init_sta...");
 
@@ -221,6 +271,17 @@ void app_main() {
 	// Init I2C driver
 	ESP_LOGI(TAG, "%s: calling i2c_master_init", __FILE__);
     i2c_master_init();
+
+	// Install the heating pad sensor
+	ESP_LOGI(TAG, "setting up bmx280");
+    bmx280_t* bmx280 = NULL;
+	ret = bmx280_dev_init(&bmx280, bus_handle);
+	if(ret != ESP_OK)
+	{
+		ESP_LOGE(TAG,"bmx280_dev_init() failed = %d(%s)", ret,esp_err_to_name(ret));
+	}
+
+    ESP_ERROR_CHECK(bmx280_setMode(bmx280, BMX280_MODE_CYCLE));
 
 	// Create Queue
 	xQueueHttp = xQueueCreate( 10, sizeof(Incubator_URL) );
@@ -231,9 +292,6 @@ void app_main() {
 	ESP_ERROR_CHECK(mountSPIFFS("/html", "storage", 6));
 	ESP_ERROR_CHECK(start_server("/spiffs", CONFIG_WEB_PORT));
 #endif 
-
-	// TODO: Init ntp protocol (time server) ?? 
-	//ntp_app_main();
 	
 	//GPIO initialization
 	ESP_LOGI(TAG, "%s: setting up GPIO", __FILE__);
@@ -260,9 +318,41 @@ void app_main() {
 
 	ESP_LOGI(TAG, "- App is running ... ...\n");
 
-	while(1)
+	while (1)
 	{
-        vTaskDelay(pdMS_TO_TICKS(5000));
-	}
+#ifdef	USE_DS18B20
+		// Is there a temperature monitor on the heating pad?
+		if (bOnewireDevFound)
+		{
+			// Yes, avoid clash with the WiFi handling
+			if (xSemaphoreTake(xMutex, portMAX_DELAY) == pdTRUE)
+			{
+				ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(bus_handle, &device_info));
 
+				// 2. Wait for conversion (DS18B20 usually takes ~750ms at 12-bit resolution)
+				vTaskDelay(pdMS_TO_TICKS(800));
+
+				// 3. Read the temperature from the device
+				float temperature;
+				ESP_ERROR_CHECK(ds18b20_get_temperature(bus_handle, &device_info, &temperature));
+
+				ESP_LOGI(TAG, "Heating Pad Temperature: %.2f °C", temperature);
+			}
+		}
+#endif
+        do {
+            vTaskDelay(pdMS_TO_TICKS(1));
+        } while(bmx280_isSampling(bmx280));
+
+        ESP_ERROR_CHECK(bmx280_readoutFloat(bmx280, &temp, &pres, &hum));
+
+		mcounter++;
+		if(mcounter > 4)
+		{
+        	ESP_LOGI(TAG, "Heating Pad Read Values: temp = %f, pres = %f, hum = %f", temp, pres, hum);
+			mcounter = 0;
+		}
+
+		vTaskDelay(pdMS_TO_TICKS(4000));
+	}
 }
