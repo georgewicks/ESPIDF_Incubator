@@ -69,6 +69,8 @@ void 	TurnOffHeater(void)
 // LEDC PWM applied to Heating Control.
 // --------------------------------------------------------------------------------
 
+#define HP_STEPSIZE     (64)            // Heating pad step size
+
 ledc_timer_config_t ledc_timer = {
     .speed_mode       = LEDC_LOW_SPEED_MODE,
     .timer_num        = LEDC_TIMER_0,
@@ -133,7 +135,7 @@ int    RampdownCount = 4;
 void LEDCPWN_startRampUp(void)
 {
     ESP_LOGI(TAG," LEDCPWN_startRampUp");
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 128));   //  12.5% Duty cycle 
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, HP_STEPSIZE));    
     ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
     RampupCount++;
 }
@@ -141,7 +143,7 @@ void LEDCPWN_startRampUp(void)
 void LEDCPWN_startRampDown(void)
 {
     ESP_LOGI(TAG," LEDCPWN_startRampDown");
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 128*RampdownCount));   //  12.5% Duty cycle 
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, HP_STEPSIZE*RampdownCount));   //  12.5% Duty cycle 
     ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
     RampdownCount--;
 }
@@ -177,7 +179,7 @@ void NextTemperatureAction( float temperature )
                 {
                     ESP_LOGI(TAG,"RampupCount=%d",RampupCount);
                     RampupCount++;
-                    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 128 * RampupCount)); 
+                    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, HP_STEPSIZE * RampupCount)); 
                     ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
                 }
                 else if(RampupCount == 4)
@@ -217,7 +219,7 @@ void NextTemperatureAction( float temperature )
             }
             else
             {
-                ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 128 * RampdownCount)); 
+                ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, HP_STEPSIZE * RampdownCount)); 
                 ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));   
             }
             RampdownCount--;
@@ -355,7 +357,7 @@ void TempControl(void *pvParameters)
 #else
         NextTemperatureAction(CurrentTemp);
 #endif
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        vTaskDelay(pdMS_TO_TICKS(15000));
 
     }
 

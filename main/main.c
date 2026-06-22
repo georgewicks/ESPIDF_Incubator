@@ -349,7 +349,9 @@ void app_main() {
 		mcounter++;
 		if(mcounter > 4)
 		{
-        	ESP_LOGI(TAG, "Heating Pad Read Values: temp = %f, pres = %f, hum = %f", temp, pres, hum);
+        	// ESP_LOGI(TAG, "Heating Pad Read Values: temp = %f, pres = %f, hum = %f", temp, pres, hum);
+			// we don't need the pressure & humidity values, but we do want the degrees in fahrenheit besides celsius 
+        	ESP_LOGI(TAG, "Heating Pad Read Values: temp = %f C (%f F)", temp, (temp * 9)/5 + 32);
 			mcounter = 0;
 		}
 
