@@ -22,4 +22,5 @@
   * Need to connect the heating pad LED indicator; 
   * Order cell culture flasks from Amazon, since we're getting closer to testing with the shaker table setup in the incubator.
   * Check hook up to fan - might just need to turn on GPIO connection
-  
+  * When that is done, Change the GPIO to PWM for controlling the fan speed.
+   
