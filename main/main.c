@@ -33,6 +33,8 @@
 #include "driver/gpio.h"
 #include "mcp9808.h"
 
+#include "ina219.h"
+
 // Use BME280 temp sensor for the heating pad
 #include "bmx280.h"
 #include "driver/i2c_types.h"
@@ -79,7 +81,8 @@ extern float turnOnThreshold;  // = desiredTemperature - hysteresisBand;
 extern float turnOffThreshold; 	// = desiredTemperature + hysteresisBand;
 
 /*----------------------------------------------------------------*/
-
+INA219_config_t		ina219_config;
+INA219_handle_t		ina219_hand = (INA219_handle_t *)&ina219_config;
 
 /**
  * @brief I2C Handling - parameters for I2C control.
@@ -247,6 +250,7 @@ esp_err_t mountSPIFFS(char * path, char * label, int max_files) {
 void app_main() {
     float temp = 0, pres = 0, hum = 0;
 	int mcounter = 0;							// use a counter to limit debug statements
+	esp_err_t	err;
 
 	ESP_LOGI(TAG, "%s: called", __FILE__);
 
@@ -282,6 +286,10 @@ void app_main() {
 	}
 
     ESP_ERROR_CHECK(bmx280_setMode(bmx280, BMX280_MODE_CYCLE));
+
+	// initialize the INA219
+
+	err = INA219_init(&ina219_config,ina219_hand);
 
 	// Create Queue
 	xQueueHttp = xQueueCreate( 10, sizeof(Incubator_URL) );

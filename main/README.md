@@ -20,3 +20,6 @@ Add a DS18b20 Onewire temperature sensor, and attach the probe directly on the s
     * add the ds18b20 component from the esp-bsp folder to the Incubator project
     * add the monitoring handling to the TempControl.c module.
     * Create heating_pad_monitor branch git branch.
+
+# The DS18b20 temp sensor for ESP-IDF was too involved for me - several revision changes - so I abandoned ans instead used the BME280
+# Will need to add the 12v fan, and maybe another heating pad for better temperature distribution. 2026-06-21
