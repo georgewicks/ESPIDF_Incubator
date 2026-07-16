@@ -69,6 +69,7 @@ extern void http_server_task(void *pvParameters);
 // MOSFET switches for heating element and fan
 extern int   HEATING_ELEMENT_PIN;
 extern int	 HEAT_IND_PIN;
+extern int   FAN_PIN;
 
 /*----------------------------------------------------------------*/
 
@@ -106,6 +107,8 @@ INA219_handle_t		ina219_hand = (INA219_handle_t *)&ina219_config;
  */
 static void i2c_master_init(void)
 {
+	esp_err_t	errval;
+
 	ESP_LOGI(TAG, "%s: called", __FILE__);
 
 #ifdef  LEGACY_I2C
@@ -128,7 +131,11 @@ static void i2c_master_init(void)
 		.scl_io_num = GPIO_NUM_22,
 		.glitch_ignore_cnt = 7,
 	};
-	i2c_new_master_bus(&i2c_bus_config, &bus_handle);
+	errval = i2c_new_master_bus(&i2c_bus_config, &bus_handle);
+	if(errval != ESP_OK)
+	{
+		ESP_LOGE(TAG,"error from i2c_new_master_bus = %d (%s)",errval, esp_err_to_name(errval));
+	}
 
 	i2c_device_config_t dev_cfg = {
 		.dev_addr_length = I2C_ADDR_BIT_LEN_7,
@@ -136,10 +143,64 @@ static void i2c_master_init(void)
 		.scl_speed_hz = 100000,
 		.scl_wait_us = 20000,							// the MCP9808 might need clock stretching.
 	};
-	i2c_master_bus_add_device(bus_handle, &dev_cfg, &dev_handle);
+	errval = i2c_master_bus_add_device(bus_handle, &dev_cfg, &dev_handle);
+	if(errval != ESP_OK)
+	{
+		ESP_LOGE(TAG,"error from i2c_master_bus_add_device = %d (%s)",errval, esp_err_to_name(errval));
+	}
 
 #endif
 }
+
+const	TickType_t	ScanPeriod = (((5000 / portTICK_PERIOD_MS) * 12) * 10);
+
+static void i2c_scanner_task(void *pvParameters) {
+    ESP_LOGI(TAG, "Starting I2C scanner on bus %d...", I2C_MASTER_NUM);
+    
+    while (1) {
+        ESP_LOGI(TAG, "\n     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f");
+        int device_count = 0;
+
+		if (xSemaphoreTake(xMutex, portMAX_DELAY) == pdTRUE)
+		{
+
+			for (int i = 0; i < 128; i += 16)
+			{
+				printf("%02x: ", i);
+				for (int j = 0; j < 16; j++)
+				{
+					uint8_t address = i + j;
+					if (address == 0)
+					{
+						printf("-- ");
+						continue;
+					}
+
+					// Probe the address with a 50ms timeout
+					esp_err_t ret = i2c_master_probe(bus_handle, address, 50);
+
+					if (ret == ESP_OK)
+					{
+						printf("%02x ", address);
+						device_count++;
+					}
+					else
+					{
+						printf("-- ");
+					}
+					fflush(stdout);
+				}
+				printf("\n");
+			}
+		}
+        xSemaphoreGive(xMutex);
+
+		ESP_LOGI(TAG, "Scan complete. Found %d device(s). Waiting %d seconds...\n", device_count, ScanPeriod);
+		vTaskDelay(ScanPeriod);
+	}
+}
+
+
 
 #if CONFIG_USE_I2C_MASTER_DRIVER
 
@@ -155,6 +216,13 @@ esp_err_t bmx280_dev_init(bmx280_t** bmx280,i2c_master_bus_handle_t bus_handle)
     bmx280_config_t bmx_cfg = BMX280_DEFAULT_CONFIG;
     ESP_ERROR_CHECK(bmx280_configure(*bmx280, &bmx_cfg));
     return ESP_OK;
+}
+
+esp_err_t INA219_dev_init(INA219_config_t** ina219, i2c_master_bus_handle_t bus_handle)
+{
+	esp_err_t	errval = ESP_OK;
+
+	return errval;
 }
 
 #endif
@@ -275,6 +343,8 @@ void app_main() {
 	// Init I2C driver
 	ESP_LOGI(TAG, "%s: calling i2c_master_init", __FILE__);
     i2c_master_init();
+    
+    xTaskCreate(i2c_scanner_task, "i2c_scanner", 4096, NULL, 5, NULL);
 
 	// Install the heating pad sensor
 	ESP_LOGI(TAG, "setting up bmx280");
@@ -289,7 +359,17 @@ void app_main() {
 
 	// initialize the INA219
 
-	err = INA219_init(&ina219_config,ina219_hand);
+	err = INA219_init(&ina219_config, bus_handle);
+	if(err != ESP_OK)
+	{
+		ESP_LOGE(TAG,"Error from INA219_init = %d(%s)",err,esp_err_to_name(err));
+	}
+	err = INA219_SetMaxCurrentShunt(&ina219_config,5.0,0.002);
+	if(err != ESP_OK)
+	{
+		ESP_LOGE(TAG,"Error from INA219_SetMaxCurrentShunt = %d(%s)",err,esp_err_to_name(err));
+	}
+
 
 	// Create Queue
 	xQueueHttp = xQueueCreate( 10, sizeof(Incubator_URL) );
@@ -328,26 +408,6 @@ void app_main() {
 
 	while (1)
 	{
-#ifdef	USE_DS18B20
-		// Is there a temperature monitor on the heating pad?
-		if (bOnewireDevFound)
-		{
-			// Yes, avoid clash with the WiFi handling
-			if (xSemaphoreTake(xMutex, portMAX_DELAY) == pdTRUE)
-			{
-				ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(bus_handle, &device_info));
-
-				// 2. Wait for conversion (DS18B20 usually takes ~750ms at 12-bit resolution)
-				vTaskDelay(pdMS_TO_TICKS(800));
-
-				// 3. Read the temperature from the device
-				float temperature;
-				ESP_ERROR_CHECK(ds18b20_get_temperature(bus_handle, &device_info, &temperature));
-
-				ESP_LOGI(TAG, "Heating Pad Temperature: %.2f °C", temperature);
-			}
-		}
-#endif
         do {
             vTaskDelay(pdMS_TO_TICKS(1));
         } while(bmx280_isSampling(bmx280));
@@ -355,12 +415,38 @@ void app_main() {
         ESP_ERROR_CHECK(bmx280_readoutFloat(bmx280, &temp, &pres, &hum));
 
 		mcounter++;
-		if(mcounter > 4)
+		if(mcounter > 30)
 		{
-        	// ESP_LOGI(TAG, "Heating Pad Read Values: temp = %f, pres = %f, hum = %f", temp, pres, hum);
 			// we don't need the pressure & humidity values, but we do want the degrees in fahrenheit besides celsius 
         	ESP_LOGI(TAG, "Heating Pad Read Values: temp = %f C (%f F)", temp, (temp * 9)/5 + 32);
 			mcounter = 0;
+		}
+
+		esp_err_t retval;
+		float BusVoltage, ShuntVoltage, Current, Power;
+		retval = INA219_GetBusVoltage(&ina219_config,&BusVoltage);
+		if(retval != ESP_OK)
+		{
+			ESP_LOGE(TAG," error from INA219_GetBusVoltage = %d(%s)", retval, esp_err_to_name(retval));
+		}
+		else{
+			ESP_LOGI(TAG," BusVoltage = %f",BusVoltage);
+		}
+		retval = INA219_GetShuntVoltage(&ina219_config,&ShuntVoltage);
+		if(retval != ESP_OK)
+		{
+			ESP_LOGE(TAG," error from INA219_GetShuntVoltage = %d(%s)", retval, esp_err_to_name(retval));
+		}
+		else{
+			ESP_LOGI(TAG," ShuntVoltage = %f",ShuntVoltage);
+		}
+		retval = INA219_GetCurrent(&ina219_config,&Current);
+		if(retval != ESP_OK)
+		{
+			ESP_LOGE(TAG," error from INA219_GetCurrent = %d(%s)", retval, esp_err_to_name(retval));
+		}
+		else{
+			ESP_LOGI(TAG," Current = %f",Current);
 		}
 
 		vTaskDelay(pdMS_TO_TICKS(4000));

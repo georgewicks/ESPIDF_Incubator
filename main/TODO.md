@@ -23,4 +23,14 @@
   * Order cell culture flasks from Amazon, since we're getting closer to testing with the shaker table setup in the incubator.
   * Check hook up to fan - might just need to turn on GPIO connection
   * When that is done, Change the GPIO to PWM for controlling the fan speed.
-   
+  
+# 2026-07-15
+* The FAN PWM is working as intended 
+* The Heating Pad PWM Ramp up, Plateau, Ramp down work as intended.
+* Need to clear up & make standard device component structures: everyone seems to have a different way of creating their interface: some writers make code that assumes that a configuration object/item is allocated by the caller, while others will take care of the allocation of the object, resulting in sometimes pointers to pointers, which can lead to a lot of confusion in navigating. Might need to do that with some of the I2C sensor code.
+* Need to do the calls to get the current, voltage, etc. from the INA219
+* from a demo program for the INA219, do
+    Serial.print(INA.getBusVoltage(), 2);
+    Serial.print(INA.getShuntVoltage_mV(), 2);
+    Serial.print(INA.getCurrent_mA(), 2);
+    Serial.print(INA.getPower_mW(), 2);

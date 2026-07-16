@@ -47,6 +47,8 @@ typedef struct
     // I2C master handle via port with configuration
     i2c_master_dev_handle_t i2c_dev;
 
+    i2c_master_bus_handle_t bus_handle;     // need for I2C master handling...
+
     // Internal values for the INA219
     float           current_LSB;
     float           max_current;
@@ -57,7 +59,7 @@ typedef struct
 typedef void* INA219_handle_t;
 
 // Initialize the INA219
-esp_err_t INA219_init(INA219_config_t* conf, INA219_handle_t* handle );
+esp_err_t INA219_init(INA219_config_t* conf, i2c_master_bus_handle_t bus_handle);
 
 // This is the minimum work that we need to do. 
 esp_err_t   INA219_SetMaxCurrentShunt( INA219_config_t* conf, float current, 

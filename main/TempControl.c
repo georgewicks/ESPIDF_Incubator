@@ -40,6 +40,7 @@ float turnOffThreshold; 	// = desiredTemperature + hysteresisBand;
 
 const int HEATING_ELEMENT_PIN = 16;
 int	HEAT_IND_PIN = 17;
+const int FAN_PIN = 4;
 
 static const char *TAG = "TempControl";	//TAG for debug
 
@@ -89,6 +90,41 @@ ledc_channel_config_t ledc_channel = {
     .hpoint         = 0
 };
 
+// --------------------------------------------------------------------------------
+// LEDC PWM applied to FAN Control.
+// --------------------------------------------------------------------------------
+
+// 3. Configure Channel 2 (Pin 19)
+ledc_channel_config_t ledc_channel_2 = {
+    .speed_mode     = LEDC_LOW_SPEED_MODE,
+    .channel        = LEDC_CHANNEL_1,
+    .timer_sel      = LEDC_TIMER_0, // Share the same timer
+    .intr_type      = LEDC_INTR_DISABLE,
+    .gpio_num       = FAN_PIN,
+    .duty           = 0, 
+    .hpoint         = 0
+};
+
+bool    bFanOn = false;
+
+void 	TurnOnFan(void)
+{
+	ESP_LOGI(TAG,"TurnOnFan");
+	gpio_set_level( FAN_PIN,1);
+    bFanOn = true;
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, HP_STEPSIZE));    
+    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1));   
+}
+
+void 	TurnOffFan(void)
+{
+	ESP_LOGI(TAG,"TurnOffFan");
+	gpio_set_level(FAN_PIN,0);
+    bFanOn = false;
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, 0));    
+    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1));   
+}
+
 // Setup of the LEDC PWM handling
 esp_err_t   LEDC_PWM_Temp_Setup( void )
 {
@@ -113,6 +149,18 @@ esp_err_t   LEDC_PWM_Temp_Setup( void )
         }
     }
 
+    // Setup for the Fan
+    retval = ledc_channel_config(&ledc_channel_2);
+    if(retval != ESP_OK)
+    {
+        ESP_LOGE(TAG, " error from ledc_channel_config = %d(%s)", retval, esp_err_to_name(retval));
+        while(1)
+        {
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+        }
+    }
+
+   
     return retval;
 }
 
@@ -157,7 +205,7 @@ void NextTemperatureAction( float temperature )
     switch(LEDCPWM_heaterState)
     {
         case  INIT_HEAT:
-            ESP_LOGI(TAG, "LEDCPWM_heaterState == INIT_HEAT, temperature = %f", temperature);
+            //ESP_LOGI(TAG, "LEDCPWM_heaterState == INIT_HEAT, temperature = %f", temperature);
             // If the current temp is less than turnOnThreshold, then switch
             // the LEDCPWM_heaterState to RAMPUP_HEAT
             if(temperature < turnOnThreshold)
@@ -166,6 +214,7 @@ void NextTemperatureAction( float temperature )
                 TurnOnHeater();                         // signal with the LED
                 LEDCPWM_heaterState = RAMPUP_HEAT;
                 LEDCPWN_startRampUp();
+                ESP_LOGI(TAG, "starting RAMPUP_HEAT");
             }
             break;
         case  RAMPUP_HEAT:
@@ -184,8 +233,11 @@ void NextTemperatureAction( float temperature )
                 }
                 else if(RampupCount == 4)
                 {
+                    ESP_LOGI(TAG,"Reached PLATEAU");
                     // we've reached the Plateau - leave
                     LEDCPWM_heaterState = PLATEAU_HEAT;
+                    // Turn on the fan when we go PLATEAU
+                    TurnOnFan();
                 }
             }
             else if(temperature >= turnOnThreshold && temperature < turnOffThreshold)
@@ -198,17 +250,19 @@ void NextTemperatureAction( float temperature )
             {
                 // The temperature has surpassed both turnOnThreshold & turnOffThreshold, so now
                 // we flip back to a Rampdown procedure. This also indicates that the heating element
-                // PWM values are to high, and should be adjusted.
+                // PWM values are too high, and should be adjusted.
                 RampdownCount = 4;              // reset 
                 LEDCPWM_heaterState = RAMPDOWN_HEAT;
+                ESP_LOGI(TAG, "starting RAMPDOWN_HEAT - Overheat Warning");
             }
             break;
         case  PLATEAU_HEAT:
-            ESP_LOGI(TAG, "LEDCPWM_heaterState == PLATEAU_HEAT, temperature = %f,turnOffThreshold=%f ", temperature,turnOffThreshold);
+            //ESP_LOGI(TAG, "LEDCPWM_heaterState == PLATEAU_HEAT, temperature = %f,turnOffThreshold=%f ", temperature,turnOffThreshold);
             // If the temperature is greater than the turnOffThreshold, switch to RAMPDOWN
             if(temperature > turnOffThreshold)
             {
                 LEDCPWM_heaterState = RAMPDOWN_HEAT;
+                ESP_LOGI(TAG, "PLATEAU_HEAT to RAMPDOWN_HEAT ");
             }
             break;
         case  RAMPDOWN_HEAT:
@@ -227,12 +281,12 @@ void NextTemperatureAction( float temperature )
             if(!RampdownCount)
             {
                 TurnOffHeater();
-                // NO!! Do not reset RampdownCount! 
-                //  RampdownCount = 4;                  // Reset
                 ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));     // No power for PWM is what we need. 
                 ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));   
                 LEDCPWM_heaterState = INIT_HEAT;    // reset to start.
+                TurnOffFan();
                 RampupCount = 0;                    // Reset
+                ESP_LOGI(TAG, "going back to INIT_HEAT");
             }
             // ??
             break;
@@ -244,7 +298,8 @@ void NextTemperatureAction( float temperature )
 }
 
 // --------------------------------------------------------------------------------
-
+// Browser API functions
+// --------------------------------------------------------------------------------
 
 // request for new value
 esp_err_t   Temp_set_target_temp( int val )

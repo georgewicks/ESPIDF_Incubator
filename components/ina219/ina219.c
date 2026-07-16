@@ -25,6 +25,9 @@
 #include "driver/i2c.h"
 #else
 #include "driver/i2c_master.h"
+extern SemaphoreHandle_t	xMutex;
+extern i2c_master_bus_handle_t bus_handle;
+extern i2c_master_dev_handle_t dev_handle;
 #endif
 
 #include "ina219.h"
@@ -41,7 +44,9 @@ static esp_err_t INA219_read16(  const INA219_config_t* conf, uint8_t reg,
     // copy the 8 bit register to the first byte of the write_buf
     write_buf[0] = reg;
     
-    return i2c_master_transmit_receive( conf->i2c_dev, (uint8_t *)write_buf, 1, 
+    // return i2c_master_transmit_receive( conf->i2c_dev, (uint8_t *)write_buf, 1, 
+    //                                    (uint8_t *)read_buf, 2, CONFIG_BMX280_TIMEOUT);
+    return i2c_master_transmit_receive( dev_handle, (uint8_t *)write_buf, 1, 
                                         (uint8_t *)read_buf, 2, CONFIG_BMX280_TIMEOUT);
 }
 
@@ -53,7 +58,8 @@ static esp_err_t INA219_write(  const INA219_config_t* conf, uint8_t addr,
     for(uint8_t i = 0; i < size; i++)
     {
         uint8_t dat[2] = {(addr + i), din[i]};
-        if ((retval = i2c_master_transmit(conf->i2c_dev, dat, 2, CONFIG_BMX280_TIMEOUT)) != ESP_OK)
+        //if ((retval = i2c_master_transmit(conf->i2c_dev, dat, 2, CONFIG_BMX280_TIMEOUT)) != ESP_OK)
+        if ((retval = i2c_master_transmit(dev_handle, dat, 2, CONFIG_BMX280_TIMEOUT)) != ESP_OK)
             return retval;
     }
 
@@ -66,7 +72,7 @@ static esp_err_t INA219_write(  const INA219_config_t* conf, uint8_t addr,
  */
 
 // Initialize the INA219
-esp_err_t INA219_init(INA219_config_t* conf, INA219_handle_t* handle)
+esp_err_t INA219_init(INA219_config_t* conf, i2c_master_bus_handle_t bus_handle)
 {
     esp_err_t   retval = ESP_OK;
 
@@ -75,6 +81,7 @@ esp_err_t INA219_init(INA219_config_t* conf, INA219_handle_t* handle)
     // Need the following in order to communicate on the i2c
     conf->i2c_address = INA219_I2C_ADDR;
     conf->i2c_num = INA219_I2C_NUM;
+    conf->bus_handle = bus_handle;
 
     return(retval);
 }
