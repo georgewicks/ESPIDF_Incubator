@@ -364,12 +364,24 @@ void app_main() {
 	{
 		ESP_LOGE(TAG,"Error from INA219_init = %d(%s)",err,esp_err_to_name(err));
 	}
+	/*
 	err = INA219_SetMaxCurrentShunt(&ina219_config,5.0,0.002);
 	if(err != ESP_OK)
 	{
 		ESP_LOGE(TAG,"Error from INA219_SetMaxCurrentShunt = %d(%s)",err,esp_err_to_name(err));
 	}
-
+	 */
+	err = ina219_configure(&ina219_config,INA219_BUS_RANGE_16V, INA219_GAIN_0_125,
+            INA219_RES_12BIT_1S, INA219_RES_12BIT_1S, INA219_MODE_CONT_SHUNT_BUS);
+	if(err != ESP_OK)
+	{
+		ESP_LOGE(TAG,"Error from ina219_configure = %d(%s)",err,esp_err_to_name(err));
+	}
+	err = ina219_calibrate( &ina219_config,(float)CONFIG_EXAMPLE_SHUNT_RESISTOR_MILLI_OHM / 1000.0f);
+	if(err != ESP_OK)
+	{
+		ESP_LOGE(TAG,"Error from ina219_calibrate = %d(%s)",err,esp_err_to_name(err));
+	}
 
 	// Create Queue
 	xQueueHttp = xQueueCreate( 10, sizeof(Incubator_URL) );
@@ -415,38 +427,32 @@ void app_main() {
         ESP_ERROR_CHECK(bmx280_readoutFloat(bmx280, &temp, &pres, &hum));
 
 		mcounter++;
-		if(mcounter > 30)
+		if(mcounter > 15)
 		{
-			// we don't need the pressure & humidity values, but we do want the degrees in fahrenheit besides celsius 
-        	ESP_LOGI(TAG, "Heating Pad Read Values: temp = %f C (%f F)", temp, (temp * 9)/5 + 32);
+			// we don't need the pressure & humidity values, but we do want the degrees in fahrenheit besides celsius
+			ESP_LOGI(TAG, "Heating Pad Read Values: temp = %f C (%f F)", temp, (temp * 9) / 5 + 32);
 			mcounter = 0;
-		}
 
-		esp_err_t retval;
-		float BusVoltage, ShuntVoltage, Current, Power;
-		retval = INA219_GetBusVoltage(&ina219_config,&BusVoltage);
-		if(retval != ESP_OK)
-		{
-			ESP_LOGE(TAG," error from INA219_GetBusVoltage = %d(%s)", retval, esp_err_to_name(retval));
-		}
-		else{
-			ESP_LOGI(TAG," BusVoltage = %f",BusVoltage);
-		}
-		retval = INA219_GetShuntVoltage(&ina219_config,&ShuntVoltage);
-		if(retval != ESP_OK)
-		{
-			ESP_LOGE(TAG," error from INA219_GetShuntVoltage = %d(%s)", retval, esp_err_to_name(retval));
-		}
-		else{
-			ESP_LOGI(TAG," ShuntVoltage = %f",ShuntVoltage);
-		}
-		retval = INA219_GetCurrent(&ina219_config,&Current);
-		if(retval != ESP_OK)
-		{
-			ESP_LOGE(TAG," error from INA219_GetCurrent = %d(%s)", retval, esp_err_to_name(retval));
-		}
-		else{
-			ESP_LOGI(TAG," Current = %f",Current);
+#ifdef	TESTING_INA219
+			esp_err_t retval;
+			float BusVoltage, ShuntVoltage, Current, Power;
+			retval = INA219_GetBusVoltage(&ina219_config, &BusVoltage);
+			if (retval != ESP_OK)
+			{
+				ESP_LOGE(TAG, " error from INA219_GetBusVoltage = %d(%s)", retval, esp_err_to_name(retval));
+			}
+			retval = INA219_GetShuntVoltage(&ina219_config, &ShuntVoltage);
+			if (retval != ESP_OK)
+			{
+				ESP_LOGE(TAG, " error from INA219_GetShuntVoltage = %d(%s)", retval, esp_err_to_name(retval));
+			}
+			retval = INA219_GetCurrent(&ina219_config, &Current);
+			if (retval != ESP_OK)
+			{
+				ESP_LOGE(TAG, " error from INA219_GetCurrent = %d(%s)", retval, esp_err_to_name(retval));
+			}
+			ESP_LOGI(TAG,"  BusVoltage = %.04f,  ShuntVoltage = %.04f mV, Current = %.04f mA ", BusVoltage, ShuntVoltage * 1000, Current * 1000);
+#endif
 		}
 
 		vTaskDelay(pdMS_TO_TICKS(4000));

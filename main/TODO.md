@@ -34,3 +34,10 @@
     Serial.print(INA.getShuntVoltage_mV(), 2);
     Serial.print(INA.getCurrent_mA(), 2);
     Serial.print(INA.getPower_mW(), 2);
+
+# 2026-07-16
+* Will re-use some of the esp-idf-lib INA219 code for the INA219 configuration and calibration. Including the License file.
+
+# 2026-07-20
+* I am pushing the use of the INA219 sensor to the backburner for the time being. I have preliminary data for the current draw on the 12V Heating Pad circuit, which gives a range of 22 mA to 30 mA by use of the multimeter. This certainly does not look like a pressing issue - but may become important in the future, so I am also putting in application notes for current sensing in the docs folder.
+* must re-wire & remove multimeter.
