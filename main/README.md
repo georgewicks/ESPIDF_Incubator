@@ -1,25 +1,71 @@
-# 2026-06-02 --- Add PWM control for the 12V Heating element
 
-History: we tried using a simpler 5V heating element, but that proved inadequate. It only warmed up 1 degree centigrade warmer over the ambient temperature. It is entirely possible that the LM2985 DC-DC converter may be severely limiting current, and that might be the reason for the dismal warming properties, however, I did find a more powerful 12V heating element available on Amazon, and that does seem to be extremely good. However, it does heat up very quickly: the temperature readings were greater than 170 degrees F in about a minute - dangerously quick overheating potential.
+# ESPIDF_Incubator
 
-Therefore, it is worthwhile to explore the application of PWM to the heating element TIP120 NPN Darlington pair power transistor. (NOTE: may want to also revisit using a better switching transistor).
+* The ESPIDF_Incubator is an incubation system for growing bacterial/fungal cultures in erlenmeyer flasks, typically on a shaker table. The incubation system will control the internal temperature, which uses a heating pad, along with a small fan for heat/cooling distribution, along with a WiFi based web server that allows technicians to monitor and adjust environment settings. This system was designed for low-cost operation, possible reuse of existing, surplus materials, along with cheaper electronic components. 
 
-Please see the "PWM Control of 12V Heating Element in the Incubator" in the docs folder for more details
+# source template from https://embeddedartistry.com/blog/2017/11/30/embedded-artistry-readme-template/
 
-* Basic outline
-    * Step 1: Source must the header:    #include "driver/ledc.h"
-    * Step 2: Configure the Timer. (see doc)
-    * Step 3: Configure the Channel.  ("")
-    * Step 4: Set (and change) the Duty Cycle. (see doc)
+# Project Title
 
-# 2026-06-15 --- Need to add another temperature sensor to the system in order to better monitor the heating pad.
+Provide an introductory paragraph, describing:
 
-Add a DS18b20 Onewire temperature sensor, and attach the probe directly on the surface of the heating pad. By getting a more precise temperature reading, we can better address what the PWM maximum values should be for the heating pad - we want to avoid any potential problems. 
-    * use GPIO 5 for the onewire. 
-    * add 4.7K ohm resistor between GPIO 5 and VCC (3.3v) - the pull-up resistor needed for onewire
-    * add the ds18b20 component from the esp-bsp folder to the Incubator project
-    * add the monitoring handling to the TempControl.c module.
-    * Create heating_pad_monitor branch git branch.
+* What your project does
+* Why people should consider using your project
+* Link to project home page
 
-# The DS18b20 temp sensor for ESP-IDF was too involved for me - several revision changes - so I abandoned ans instead used the BME280
-# Will need to add the 12v fan, and maybe another heating pad for better temperature distribution. 2026-06-21
+## Table of Contents
+
+1. [About the Project](#about-the-project)
+1. [Project Status](#project-status)
+1. [Getting Started](#getting-started)
+    1. [Dependencies](#dependencies)
+    1. [Building](#building)
+    2. [Running Tests](#running-tests)
+        1. [Other Tests](#other-tests)
+    1. [Installation](#installation)
+    1. [Usage](#usage)
+1. [Release Process](#release-process)
+    1. [Versioning](#versioning)
+    1. [Payload](#payload)
+1. [How to Get Help](#how-to-get-help)
+1. [Contributing](#contributing)
+1. [Further Reading](#further-reading)
+1. [License](#license)
+1. [Authors](#authors)
+1. [Acknowledgments](#acknowledgements)
+
+## About the Project
+
+Here you can provide more details about the project
+* What features does your project provide?
+* Short motivation for the project? (Don't be too long winded)
+* Links to the project site
+
+```
+Show some example code to describe what your project does
+Show some of your APIs
+```
+
+**[Back to top](#table-of-contents)**
+
+## Project Status
+
+Show the build status if you have a CI server:
+
+[![Build Status](http://your-server:12345/job/badge/icon)](http://your-server/job/badge/icon/)
+
+Describe the current release and any notes about the current state of the project. Examples: currently compiles on your host machine, but is not cross-compiling for ARM, APIs are not set, feature not implemented, etc.
+
+**[Back to top](#table-of-contents)**
+
+## Getting Started
+
+This section should provide instructions for other developers to
+
+These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
+
+### Dependencies
+
+Describe what software and libraries you will need to install in order to build and use this project. Provide details on how to resolve these dependencies.
+
+Remember: `git-lfs` is a dependency that developers will need to resolve before they can get started with a repository using LFS.
